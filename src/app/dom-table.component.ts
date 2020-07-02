@@ -2,6 +2,17 @@ import {Component, ElementRef, Renderer2, ViewChild} from '@angular/core';
 import {ITable} from './ITable';
 import * as DOMPurify from 'dompurify';
 
+/**
+ *  DOM-based table generator -- generates the table DOM using DOM API and insert it into Angular component.
+ *  Notes
+ *  - Bypassing Angular templating clearly improves performance
+ *  - Most of processing time goes in just generating the DOM element
+ *      - DOM API binds directly into native API which JS engine has to jump through multiple times
+ *  - Massive optimization: DOMPurify is run on the table DOM **in-place**
+ *     - Cuts down sanitizing time to about 100 ms
+ *  - Allows semi-easy data manipulation, because all nodes are easily accessible
+ */
+
 @Component({
     selector: 'app-dom-table',
     template: `

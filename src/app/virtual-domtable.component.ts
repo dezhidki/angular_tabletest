@@ -2,6 +2,17 @@ import {Component, ElementRef, Renderer2, ViewChild} from '@angular/core';
 import {ITable} from './ITable';
 import * as DOMPurify from 'dompurify';
 
+/**
+ * Virtual DOM Table -- generates only visible rows and updates them to create "virtual" scrolling effect
+ * Notes
+ * - Nearly instant generation
+ * - Can allow most of table options like hiding + spanning
+ *      - Requires additional rendering logic
+ * - Can be integrated with pure DOM table
+ * - DOMPurify calls are the same as in Angular table, but they are evaluated lazily
+ * - Requires to know column + cell sizes beforehand (or their computation via a shadow DOM)
+ */
+
 @Component({
     selector: 'app-virtual-domtable',
     template: `
@@ -36,6 +47,7 @@ export class VirtualDOMTableComponent extends ITable {
 
     scrollAnimationRequested = false;
     prevScroll = -1;
+
     handleScroll(): void {
         if (!this.cells.length || this.scrollAnimationRequested) {
             return;

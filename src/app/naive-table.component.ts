@@ -1,6 +1,14 @@
 import {Component} from '@angular/core';
 import {ITable} from './ITable';
 
+/**
+ * Table implemented via pure Angular -- basically the same as in TIM.
+ * Notes
+ * - REALLY slow load on big data
+ * - DOMPurify is the biggest, because it has to be run on every cell
+ *    - Each DOMPurify run generates its own shadow DOM
+ * - Angular template runner is second slowest because it has to check for dirty elements and validate input
+ */
 
 @Component({
     selector: 'app-naive-table',
@@ -27,7 +35,7 @@ import {ITable} from './ITable';
         </table>
     `
 })
-export class NaiveTableComponent extends ITable{
+export class NaiveTableComponent extends ITable {
 
     constructor() {
         super();

@@ -1,0 +1,10 @@
+table {
+    display: block;
+    &.scroll {
+        overflow: scroll;
+    }
+}
+
+tbody.virtual {
+    display: block;
+}

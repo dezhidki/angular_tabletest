@@ -8,6 +8,7 @@ import { InnerHTMLTableComponent } from './inner-htmltable.component';
 import { SafePipe } from './safe.pipe';
 import { PurifyPipe } from './purify.pipe';
 import { VirtualDOMTableComponent } from './virtual-domtable.component';
+import { DataViewComponent } from './data-view.component';
 
 @NgModule({
   declarations: [
@@ -18,6 +19,7 @@ import { VirtualDOMTableComponent } from './virtual-domtable.component';
     SafePipe,
     PurifyPipe,
     VirtualDOMTableComponent,
+    DataViewComponent,
   ],
   imports: [
     BrowserModule

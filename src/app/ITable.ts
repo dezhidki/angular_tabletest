@@ -1,3 +1,5 @@
+import {TableModelProvider} from "./data-view.component";
+import {COLS, DATA, ROWS} from "./data";
 
 function rainbow(numOfSteps, step): string {
     let r = 0;
@@ -45,6 +47,41 @@ function rainbow(numOfSteps, step): string {
         // tslint:disable-next-line:no-bitwise
         (~~(b * 255)).toString(16)).slice(-2);
     return (c);
+}
+
+export class TestTableProvider implements TableModelProvider {
+    classForCell(rowIndex: number, columnIndex: number): string {
+        return `cell-${rowIndex}-${columnIndex}`;
+    }
+
+    getCellWidth(columnIndex: number): number | undefined {
+        return undefined;
+    }
+
+    getDimension(): { rows: number; columns: number } {
+        return {columns: COLS, rows: ROWS};
+    }
+
+    getRowContents(rowIndex: number): string[] {
+        return DATA[rowIndex];
+    }
+
+    getRowHeight(rowIndex: number): number | undefined {
+        return undefined;
+    }
+
+    handleClickCell(rowIndex: number, columnIndex: number): void {
+        console.log(`Clicked (r: ${rowIndex}; c: ${columnIndex} )`);
+    }
+
+    stylingForCell(rowIndex: number, columnIndex: number): string {
+        return `background-color: ${rainbow(ROWS + COLS, rowIndex + columnIndex)}`;
+    }
+
+    stylingForRow(rowIndex: number): string {
+        return `font-weight: ${(rowIndex % 9) + 1}00 !important;`;
+    }
+
 }
 
 export abstract class ITable {

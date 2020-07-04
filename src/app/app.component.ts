@@ -1,22 +1,30 @@
 import {Component} from '@angular/core';
 import {COLS, DATA, ROWS} from './data';
 import {ITable, TestTableProvider} from './ITable';
-import {TableModelProvider} from "./data-view.component";
+import {TableModelProvider} from './data-view.component';
 
 @Component({
     selector: 'app-root',
     template: `
         <h1>DataView</h1>
+        <p>Overview and current progress</p>
+        <ul>
+            <li>Generic model view for tabular data</li>
+            <li>Does not implement any table logic (filtering, searching), only handles displaying data</li>
+            <li>Generates data directly into DOM</li>
+            <li>Support for virtual scrolling</li>
+            <li>Allows to specify header data => can be set to sticky via <code>appFixedData</code> directive</li>
+        </ul>
         <button (click)="show = true">Show</button>
         <div style="width: 50vw; height: 50vh; overflow: scroll; margin: auto">
             <app-data-view *ngIf="show" [stickyHeader]="true" [modelProvider]="dataProvider" [virtualScrolling]="false">
                 <thead appFixedData>
-                    <th *ngFor="let header of dataCols">{{header}}</th>
+                <th *ngFor="let header of dataCols">{{header}}</th>
                 </thead>
                 <tbody appFixedData>
-                    <td *ngFor="let header of dataCols">
-                        <input type="text" [value]="header"/>
-                    </td>
+                <td *ngFor="let header of dataCols">
+                    <input type="text" value="Input {{header}}"/>
+                </td>
                 </tbody>
             </app-data-view>
         </div>

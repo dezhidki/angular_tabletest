@@ -1,3 +1,10 @@
+:host ::ng-deep .fixed-data {
+    & th, & td {
+        position: sticky;
+        position: -webkit-sticky;
+    }
+}
+
 table {
     display: block;
     &.scroll {

@@ -9,6 +9,7 @@ import { SafePipe } from './safe.pipe';
 import { PurifyPipe } from './purify.pipe';
 import { VirtualDOMTableComponent } from './virtual-domtable.component';
 import { DataViewComponent } from './data-view.component';
+import { FixedDataDirective } from './fixed-data.directive';
 
 @NgModule({
   declarations: [
@@ -20,6 +21,7 @@ import { DataViewComponent } from './data-view.component';
     PurifyPipe,
     VirtualDOMTableComponent,
     DataViewComponent,
+    FixedDataDirective,
   ],
   imports: [
     BrowserModule

@@ -9,7 +9,16 @@ import {TableModelProvider} from "./data-view.component";
         <h1>DataView</h1>
         <button (click)="show = true">Show</button>
         <div style="width: 50vw; height: 50vh; overflow: scroll; margin: auto">
-            <app-data-view *ngIf="show" [modelProvider]="dataProvider" [virtualScrolling]="false"></app-data-view>
+            <app-data-view *ngIf="show" [stickyHeader]="true" [modelProvider]="dataProvider" [virtualScrolling]="false">
+                <thead appFixedData>
+                    <th *ngFor="let header of dataCols">{{header}}</th>
+                </thead>
+                <tbody appFixedData>
+                    <td *ngFor="let header of dataCols">
+                        <input type="text" [value]="header"/>
+                    </td>
+                </tbody>
+            </app-data-view>
         </div>
 
         <h1>Original tests</h1>
@@ -151,6 +160,7 @@ import {TableModelProvider} from "./data-view.component";
     styleUrls: ['./app.component.css']
 })
 export class AppComponent {
+    dataCols = Array.from(new Array(COLS)).map((_, i) => i);
     show = false;
     dataProvider: TableModelProvider = new TestTableProvider();
 

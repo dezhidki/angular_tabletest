@@ -1,5 +1,16 @@
-import {AfterViewInit, Component, ElementRef, Input, OnInit, Renderer2, ViewChild} from '@angular/core';
+import {
+    AfterContentInit,
+    AfterViewInit,
+    Component,
+    ContentChildren,
+    ElementRef,
+    Input,
+    OnInit, QueryList,
+    Renderer2,
+    ViewChild
+} from '@angular/core';
 import * as DOMPurify from 'dompurify';
+import {FixedDataDirective} from "./fixed-data.directive";
 
 export interface TableModelProvider {
     getDimension(): { rows: number, columns: number };
@@ -25,7 +36,7 @@ export interface TableModelProvider {
 @Component({
     selector: 'app-data-view',
     template: `
-        <table>
+        <table #table>
             <ng-content></ng-content>
             <tbody #container>
             </tbody>
@@ -34,9 +45,12 @@ export interface TableModelProvider {
     styleUrls: ['./data-view.component.scss']
 })
 export class DataViewComponent implements AfterViewInit, OnInit {
-    @ViewChild('container') container: ElementRef;
-    @Input() modelProvider: TableModelProvider;
-    @Input() virtualScrolling: boolean;
+    @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
+    @ViewChild('container') container!: ElementRef;
+    @ViewChild('table') table!: ElementRef;
+    @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
+    @Input() virtualScrolling = false;
+    @Input() stickyHeader = false;
     hiddenRows: Set<number> = new Set<number>();
     hiddenColumns: Set<number> = new Set<number>();
     rowOrder: number[] = [];
@@ -54,7 +68,18 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.buildTable();
     }
 
+    private updateStickyHeaders(): void {
+        if (this.fixedElements.length === 0 || (!this.virtualScrolling && !this.stickyHeader)) {
+            return;
+        }
+        const tableEl = this.table.nativeElement as HTMLTableElement;
+        for (const item of this.fixedElements) {
+            item.updateSticky(tableEl);
+        }
+    }
+
     buildTable(): void {
+        this.updateStickyHeaders();
         const tbody = this.tbody;
 
         const {rows, columns} = this.modelProvider.getDimension();

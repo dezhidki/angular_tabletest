@@ -40,7 +40,7 @@ interface Viewport {
 }
 
 // TODO: Redo vscroll mode to consist of two tables instead of one
-//      * Idea:
+//      * Idea (https://uxdesign.cc/position-stuck-96c9f55d9526):
 //           <div #parent>
 //               <div #header>Header</div>
 //               <div #data>Data here</div>

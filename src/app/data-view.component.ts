@@ -34,6 +34,11 @@ export interface VirtualScrollingOptions {
     viewOverflow: number;
 }
 
+interface Viewport {
+    start: number;
+    count: number;
+}
+
 // TODO: Handle vscroll mode
 //      * [hidden] is instead list of visible components
 
@@ -73,6 +78,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     cellValueCache: Record<number, string[]> = {};
 
     scheduledUpdate = false;
+    private viewport: Viewport = {start: 0, count: 0};
 
     ngOnInit(): void {
         const {rows, columns} = this.modelProvider.getDimension();
@@ -90,6 +96,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.scheduledUpdate = true;
         requestAnimationFrame(() => {
             this.updateStickyHeaders();
+            const newViewport = this.getViewport();
+            const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) > this.itemsInViewportCount;
+            if (shouldUpdate) {
+                console.log('Update!');
+            }
             this.scheduledUpdate = false;
         });
     }
@@ -115,7 +126,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         }
     }
 
-    private getShowDimensions(): { start: number, count: number } {
+    private getViewport(): Viewport {
         const table = this.tableEl;
         const {rows} = this.modelProvider.getDimension();
         if (this.virtualScrolling.enabled) {
@@ -124,14 +135,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 throw new Error('Virtual scrolling requires to have row height to be set');
             }
             const h = table.clientHeight;
-            const inViewItemsCount = Math.ceil(h / itemHeight);
-            // Get start index without clamping
-            let start = Math.ceil(table.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow;
-            // Get end index, but clamp it to the end of the table
-            const end = Math.min(start + inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows - 1);
-            // Finally, clamp start as well to the start
-            start = Math.max(start, 0);
-            return {start, count: end - start};
+            const inViewItemsCount = this.itemsInViewportCount;
+            const start = Math.max(Math.ceil(table.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow, 0);
+            const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows);
+            return {start, count};
         }
         return {start: 0, count: rows};
     }
@@ -154,7 +161,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const tbody = this.tbody;
 
         const {columns} = this.modelProvider.getDimension();
-        const {start, count} = this.getShowDimensions();
+        this.viewport = this.getViewport();
+        const {start, count} = this.viewport;
         this.prepareTable(start);
 
         for (let rowNumber = start; rowNumber < count; rowNumber++) {
@@ -213,14 +221,14 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         // For virtual scrolling, we have to DOMPurify each cell separately, which can bring the performance down a bit
         return this.cellValueCache[rowIndex] = this.modelProvider.getRowContents(rowIndex).map(c => DOMPurify.sanitize(c));
     }
+
+    private get itemsInViewportCount(): number {
+        return Math.ceil(this.tableEl.clientHeight / this.modelProvider.getRowHeight());
+    }
 }
 
 type HTMLKeys<K extends keyof HTMLElementTagNameMap> = Partial<{ [k in keyof HTMLElementTagNameMap[K]]: unknown }>;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, opts?: HTMLKeys<K>): HTMLElementTagNameMap[K] {
     return Object.assign(document.createElement(tag), opts);
-}
-
-function clamp(val: number, min: number, max: number): number {
-    return Math.max(Math.min(val, max), min);
 }

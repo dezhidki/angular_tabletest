@@ -39,8 +39,16 @@ interface Viewport {
     count: number;
 }
 
-// TODO: Handle vscroll mode
-//      * [hidden] is instead list of visible components
+// TODO: Redo vscroll mode to consist of two tables instead of one
+//      * Idea:
+//           <div #parent>
+//               <div #header>Header</div>
+//               <div #data>Data here</div>
+//           </div>
+//      * Then sync scrolling of both
+// TODO: fix shouldUpdate (right now top overflow not detected properly)
+// TODO: Support for hiding rows
+// TODO: Support for row/column span
 
 @Component({
     selector: 'app-data-view',
@@ -76,13 +84,15 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     hiddenColumns: Set<number> = new Set<number>();
     rowOrder: number[] = [];
     cellValueCache: Record<number, string[]> = {};
+    cellCache: HTMLTableDataCellElement[][] = [];
+    rowCache: HTMLTableRowElement[] = [];
 
     scheduledUpdate = false;
     private viewport: Viewport = {start: 0, count: 0};
 
     ngOnInit(): void {
-        const {rows, columns} = this.modelProvider.getDimension();
-        this.rowOrder = [...new Array(rows)].map((val, index) => index);
+        const {rows} = this.modelProvider.getDimension();
+        this.rowOrder = Array.from(new Array(rows)).map((val, index) => index);
     }
 
     ngAfterViewInit(): void {
@@ -97,16 +107,37 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         requestAnimationFrame(() => {
             this.updateStickyHeaders();
             const newViewport = this.getViewport();
-            const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) > this.itemsInViewportCount;
+            const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) + 2 > this.itemsInViewportCount;
             if (shouldUpdate) {
                 console.log('Update!');
+                this.updateViewport(newViewport);
             }
             this.scheduledUpdate = false;
         });
     }
 
+    private updateViewport(newViewport: Viewport): void {
+        this.viewport = newViewport;
+        const {columns} = this.modelProvider.getDimension();
+        for (let rowNumber = 0; rowNumber < this.viewport.count; rowNumber++) {
+            const tr = this.rowCache[rowNumber];
+            tr.hidden = false;
+            const rowIndex = this.rowOrder[this.viewport.start + rowNumber];
+            this.updateRow(tr, rowIndex);
+            const rowData = this.getRowValues(rowIndex);
+            for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
+                const td = this.cellCache[rowNumber][columnIndex];
+                this.updateCell(td, rowIndex, columnIndex, rowData[columnIndex]);
+            }
+        }
+        for (let rowNumber = this.viewport.count; rowNumber < this.rowCache.length; rowNumber++) {
+            this.rowCache[rowNumber].hidden = true;
+        }
+        this.viewportScroll = this.viewport.start * this.modelProvider.getRowHeight();
+    }
+
     private updateStickyHeaders(): void {
-        if (this.fixedElements.length === 0 || !this.virtualScrolling) {
+        if (this.fixedElements.length === 0 || !this.virtualScrolling.enabled) {
             return;
         }
         const tableEl = this.tableEl;
@@ -116,7 +147,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private updateHeaderWidths(): void {
-        if (this.fixedElements.length === 0 || !this.virtualScrolling) {
+        if (this.fixedElements.length === 0 || !this.virtualScrolling.enabled) {
             return;
         }
         const {columns} = this.modelProvider.getDimension();
@@ -134,10 +165,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             if (!itemHeight) {
                 throw new Error('Virtual scrolling requires to have row height to be set');
             }
-            const h = table.clientHeight;
             const inViewItemsCount = this.itemsInViewportCount;
             const start = Math.max(Math.ceil(table.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow, 0);
-            const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows);
+            const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows - start);
             return {start, count};
         }
         return {start: 0, count: rows};
@@ -152,7 +182,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const tableHeight = rows * rowHeight;
         const tbody = this.tbody;
         tbody.style.height = `${tableHeight}px`;
-        tbody.style.transform = `translateY(${start * rowHeight}px)`;
+        this.viewportScroll = start * rowHeight;
     }
 
     buildTable(): void {
@@ -165,8 +195,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const {start, count} = this.viewport;
         this.prepareTable(start);
 
-        for (let rowNumber = start; rowNumber < count; rowNumber++) {
-            const rowIndex = this.rowOrder[rowNumber];
+        for (let rowNumber = 0; rowNumber < count; rowNumber++) {
+            const rowIndex = this.rowOrder[start + rowNumber];
             const tr = this.makeRow(rowIndex);
             const rowData = this.getRowValues(rowIndex);
             for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
@@ -175,32 +205,50 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             tbody.appendChild(tr);
         }
         // Optimization: sanitize whole tbody in place
-        if (!this.virtualScrolling) {
+        if (!this.virtualScrolling.enabled) {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
         }
     }
 
     private makeRow(row: number): HTMLTableRowElement {
-        const rowEl = el('tr', {
-            style: this.modelProvider.stylingForRow(row),
-            hidden: this.hiddenRows.has(row)
-        });
-        const rowHeight = this.modelProvider.getRowHeight();
-        if (rowHeight) {
-            rowEl.style.height = `${rowHeight}px`;
-            rowEl.style.overflow = 'hidden';
+        const rowEl = this.updateRow(document.createElement('tr'), row);
+        if (this.virtualScrolling.enabled) {
+            this.cellCache.push([]);
+            this.rowCache.push(rowEl);
         }
         return rowEl;
     }
 
-    private makeCell(row: number, column: number, contents?: string): HTMLTableDataCellElement {
-        const cell = el('td', {
-            hidden: this.hiddenColumns.has(column),
-            className: this.modelProvider.classForCell(row, column),
-            style: this.modelProvider.stylingForCell(row, column),
-            onclick: () => this.modelProvider.handleClickCell(row, column)
+    private updateRow(row: HTMLTableRowElement, rowIndex: number): HTMLTableRowElement {
+        Object.assign(row, {
+            style: this.modelProvider.stylingForRow(rowIndex),
+            hidden: this.hiddenRows.has(rowIndex)
         });
-        const colWidth = this.modelProvider.getColumnWidth(column);
+        const rowHeight = this.modelProvider.getRowHeight();
+        if (rowHeight) {
+            row.style.height = `${rowHeight}px`;
+            row.style.overflow = 'hidden';
+        }
+        return row;
+    }
+
+    private makeCell(row: number, column: number, contents?: string): HTMLTableDataCellElement {
+        const cell = this.updateCell(document.createElement('td'), row, column, contents);
+        if (this.virtualScrolling.enabled) {
+            const cur = this.cellCache[this.cellCache.length - 1];
+            cur.push(cell);
+        }
+        return cell;
+    }
+
+    private updateCell(cell: HTMLTableCellElement, rowIndex: number, columnIndex: number, contents?: string): HTMLTableCellElement {
+        Object.assign(cell, {
+            hidden: this.hiddenColumns.has(columnIndex),
+            className: this.modelProvider.classForCell(rowIndex, columnIndex),
+            style: this.modelProvider.stylingForCell(rowIndex, columnIndex),
+            onclick: () => this.modelProvider.handleClickCell(rowIndex, columnIndex)
+        });
+        const colWidth = this.modelProvider.getColumnWidth(columnIndex);
         if (colWidth) {
             cell.style.width = `${colWidth}px`;
             cell.style.overflow = 'hidden';
@@ -224,6 +272,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     private get itemsInViewportCount(): number {
         return Math.ceil(this.tableEl.clientHeight / this.modelProvider.getRowHeight());
+    }
+
+    private set viewportScroll(y: number) {
+        this.tbody.style.transform = `translateY(${y}px)`;
     }
 }
 

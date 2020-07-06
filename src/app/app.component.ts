@@ -16,10 +16,12 @@ import {TableModelProvider} from './data-view.component';
             <li>Allows to specify header data => can be set to sticky via <code>appFixedData</code> directive</li>
         </ul>
         <button (click)="show = true">Show</button>
-        <div style="width: 50vw; height: 50vh; overflow: scroll; margin: auto">
-            <app-data-view *ngIf="show" [stickyHeader]="true" [modelProvider]="dataProvider" [virtualScrolling]="false">
+        <div style="margin: auto">
+            <app-data-view *ngIf="show" [stickyHeader]="true" [modelProvider]="dataProvider" [virtualScrolling]="{
+            'enabled': true,
+            'viewOverflow': 1}">
                 <thead appFixedData>
-                <th *ngFor="let header of dataCols">{{header}}</th>
+                <th *ngFor="let header of dataCols" style="width: 300px">{{header}}</th>
                 </thead>
                 <tbody appFixedData>
                 <td *ngFor="let header of dataCols">

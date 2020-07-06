@@ -54,8 +54,8 @@ export class TestTableProvider implements TableModelProvider {
         return `cell-${rowIndex}-${columnIndex}`;
     }
 
-    getCellWidth(columnIndex: number): number | undefined {
-        return undefined;
+    getColumnWidth(columnIndex: number): number | undefined {
+        return 300;
     }
 
     getDimension(): { rows: number; columns: number } {
@@ -66,8 +66,8 @@ export class TestTableProvider implements TableModelProvider {
         return DATA[rowIndex];
     }
 
-    getRowHeight(rowIndex: number): number | undefined {
-        return undefined;
+    getRowHeight(): number | undefined {
+        return 40;
     }
 
     handleClickCell(rowIndex: number, columnIndex: number): void {

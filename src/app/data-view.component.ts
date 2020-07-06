@@ -1,5 +1,4 @@
 import {
-    AfterContentInit,
     AfterViewInit,
     Component,
     ContentChildren,
@@ -10,14 +9,14 @@ import {
     ViewChild
 } from '@angular/core';
 import * as DOMPurify from 'dompurify';
-import {FixedDataDirective} from "./fixed-data.directive";
+import {FixedDataDirective} from './fixed-data.directive';
 
 export interface TableModelProvider {
     getDimension(): { rows: number, columns: number };
 
-    getRowHeight(rowIndex: number): number | undefined;
+    getRowHeight(): number | undefined;
 
-    getCellWidth(columnIndex: number): number | undefined;
+    getColumnWidth(columnIndex: number): number | undefined;
 
     stylingForRow(rowIndex: number): string;
 
@@ -30,96 +29,192 @@ export interface TableModelProvider {
     getRowContents(rowIndex: number): string[];
 }
 
+export interface VirtualScrollingOptions {
+    enabled: boolean;
+    viewOverflow: number;
+}
+
 // TODO: In vscroll mode, replace [hidden] with value skip
 // TODO: Handle vscroll mode
 
 @Component({
     selector: 'app-data-view',
     template: `
-        <table #table>
+        <table (scroll)="handleScroll()" style="width: 50vw; height: 50vh; overflow: scroll;"
+               [class.virtual]="virtualScrolling.enabled" #table>
             <ng-content></ng-content>
-            <tbody #container>
+            <tbody class="content" #container>
             </tbody>
         </table>
     `,
     styleUrls: ['./data-view.component.scss']
 })
 export class DataViewComponent implements AfterViewInit, OnInit {
-    @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
-    @ViewChild('container') container!: ElementRef;
-    @ViewChild('table') table!: ElementRef;
-    @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
-    @Input() virtualScrolling = false;
-    @Input() stickyHeader = false;
-    hiddenRows: Set<number> = new Set<number>();
-    hiddenColumns: Set<number> = new Set<number>();
-    rowOrder: number[] = [];
-    cellValueCache: Record<number, string[]> = {};
 
     constructor(private r2: Renderer2) {
     }
 
+    private get tbody(): HTMLTableSectionElement {
+        return this.container.nativeElement as HTMLTableSectionElement;
+    }
+
+    private get tableEl(): HTMLTableElement {
+        return this.table.nativeElement as HTMLTableElement;
+    }
+
+    @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
+    @ViewChild('container') container!: ElementRef;
+    @ViewChild('table') table!: ElementRef;
+    @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
+    @Input() virtualScrolling: VirtualScrollingOptions = {enabled: false, viewOverflow: 0};
+    @Input() stickyHeader = false;
+    hiddenRows: Set<number> = new Set<number>();
+    hiddenColumns: Set<number> = new Set<number>();
+    rowOrder: number[] = [];
+    columnWidths: number[] = [];
+    cellValueCache: Record<number, string[]> = {};
+
+    scheduledUpdate = false;
+
     ngOnInit(): void {
-        const {rows} = this.modelProvider.getDimension();
+        const {rows, columns} = this.modelProvider.getDimension();
         this.rowOrder = [...new Array(rows)].map((val, index) => index);
+        this.columnWidths = Array.from(new Array(columns)).map((v, i) => this.modelProvider.getColumnWidth(i));
     }
 
     ngAfterViewInit(): void {
         this.buildTable();
     }
 
-    private updateStickyHeaders(): void {
-        if (this.fixedElements.length === 0 || (!this.virtualScrolling && !this.stickyHeader)) {
+    handleScroll(): void {
+        if (!this.virtualScrolling.enabled || this.scheduledUpdate) {
             return;
         }
-        const tableEl = this.table.nativeElement as HTMLTableElement;
+        this.scheduledUpdate = true;
+        requestAnimationFrame(() => {
+            this.updateStickyHeaders();
+            this.scheduledUpdate = false;
+        });
+    }
+
+    private updateStickyHeaders(): void {
+        if (this.fixedElements.length === 0 || !this.virtualScrolling) {
+            return;
+        }
+        const tableEl = this.tableEl;
         for (const item of this.fixedElements) {
             item.updateSticky(tableEl);
         }
     }
 
+    private updateHeaderWidths(): void {
+        if (this.fixedElements.length === 0 || !this.virtualScrolling) {
+            return;
+        }
+        const {columns} = this.modelProvider.getDimension();
+        const widths = Array.from(new Array(columns)).map((e, i) => this.modelProvider.getColumnWidth(i));
+        for (const item of this.fixedElements) {
+            item.setWidth(widths);
+        }
+    }
+
+    private getShowDimensions(): { start: number, count: number } {
+        const table = this.tableEl;
+        const {rows} = this.modelProvider.getDimension();
+        if (this.virtualScrolling.enabled) {
+            const itemHeight = this.modelProvider.getRowHeight();
+            if (!itemHeight) {
+                throw new Error('Virtual scrolling requires to have row height to be set');
+            }
+            const h = table.clientHeight;
+            const inViewItemsCount = Math.ceil(h / itemHeight);
+            // Get start index without clamping
+            let start = Math.ceil(table.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow;
+            // Get end index, but clamp it to the end of the table
+            const end = Math.min(start + inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows - 1);
+            // Finally, clamp start as well to the start
+            start = Math.max(start, 0);
+            return {start, count: end - start};
+        }
+        return {start: 0, count: rows};
+    }
+
+    private prepareTable(start: number): void {
+        if (!this.virtualScrolling.enabled) {
+            return;
+        }
+        const {rows} = this.modelProvider.getDimension();
+        const rowHeight = this.modelProvider.getRowHeight();
+        const tableHeight = rows * rowHeight;
+        const tbody = this.tbody;
+        tbody.style.height = `${tableHeight}px`;
+        tbody.style.transform = `translateY(${start * rowHeight}px)`;
+    }
+
     buildTable(): void {
         this.updateStickyHeaders();
+        this.updateHeaderWidths();
         const tbody = this.tbody;
 
-        const {rows, columns} = this.modelProvider.getDimension();
+        const {columns} = this.modelProvider.getDimension();
+        const {start, count} = this.getShowDimensions();
+        this.prepareTable(start);
 
-        for (let rowNumber = 0; rowNumber < rows; rowNumber++) {
+        for (let rowNumber = start; rowNumber < count; rowNumber++) {
             const rowIndex = this.rowOrder[rowNumber];
-            const tr = el('tr', {
-                style: this.modelProvider.stylingForRow(rowIndex),
-                hidden: this.hiddenRows.has(rowIndex)
-            });
+            const tr = this.makeRow(rowIndex);
             const rowData = this.getRowValues(rowIndex);
             for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
-                tr.appendChild(el('td', {
-                    hidden: this.hiddenColumns.has(columnIndex),
-                    className: this.modelProvider.classForCell(rowIndex, columnIndex),
-                    style: this.modelProvider.stylingForCell(rowIndex, columnIndex),
-                    onclick: () => this.modelProvider.handleClickCell(rowIndex, columnIndex),
-                    innerHTML: rowData[columnIndex]
-                }));
+                tr.appendChild(this.makeCell(rowIndex, columnIndex, rowData[columnIndex]));
             }
             tbody.appendChild(tr);
         }
         // Optimization: sanitize whole tbody in place
-        if (this.virtualScrolling) {
+        if (!this.virtualScrolling) {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
         }
     }
 
+    private makeRow(row: number): HTMLTableRowElement {
+        const rowEl = el('tr', {
+            style: this.modelProvider.stylingForRow(row),
+            hidden: this.hiddenRows.has(row)
+        });
+        const rowHeight = this.modelProvider.getRowHeight();
+        if (rowHeight) {
+            rowEl.style.height = `${rowHeight}px`;
+            rowEl.style.overflow = 'hidden';
+        }
+        return rowEl;
+    }
+
+    private makeCell(row: number, column: number, contents?: string): HTMLTableDataCellElement {
+        const cell = el('td', {
+            hidden: this.hiddenColumns.has(column),
+            className: this.modelProvider.classForCell(row, column),
+            style: this.modelProvider.stylingForCell(row, column),
+            onclick: () => this.modelProvider.handleClickCell(row, column)
+        });
+        const colWidth = this.modelProvider.getColumnWidth(column);
+        if (colWidth) {
+            cell.classList.add('fixed-width');
+            cell.style.width = `${colWidth}px`;
+        }
+        if (contents) {
+            cell.innerHTML = contents;
+        }
+        return cell;
+    }
+
     private getRowValues(rowIndex: number): string[] {
-        if (!this.virtualScrolling) {
+        if (!this.virtualScrolling.enabled) {
             return this.modelProvider.getRowContents(rowIndex);
         }
         if (this.cellValueCache[rowIndex]) {
             return this.cellValueCache[rowIndex];
         }
+        // For virtual scrolling, we have to DOMPurify each cell separately, which can bring the performance down a bit
         return this.cellValueCache[rowIndex] = this.modelProvider.getRowContents(rowIndex).map(c => DOMPurify.sanitize(c));
-    }
-
-    private get tbody(): HTMLTableSectionElement {
-        return this.container.nativeElement as HTMLTableSectionElement;
     }
 }
 
@@ -127,4 +222,8 @@ type HTMLKeys<K extends keyof HTMLElementTagNameMap> = Partial<{ [k in keyof HTM
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, opts?: HTMLKeys<K>): HTMLElementTagNameMap[K] {
     return Object.assign(document.createElement(tag), opts);
+}
+
+function clamp(val: number, min: number, max: number): number {
+    return Math.max(Math.min(val, max), min);
 }

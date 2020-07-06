@@ -12,6 +12,24 @@ table {
     }
 }
 
-tbody.virtual {
-    display: block;
+::ng-deep table.virtual {
+    tbody, thead {
+        width: max-content;
+        display: block;
+        position: relative;
+    }
+
+    tbody, thead {
+        &:not(.content) {
+            z-index: 5;
+        }
+        &.content {
+            z-index: 1;
+        }
+    }
+}
+
+.fixed-width td, .fixed-width th {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

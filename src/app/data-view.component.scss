@@ -13,6 +13,7 @@ table {
 }
 
 ::ng-deep table.virtual {
+    word-break: break-all;
     tbody, thead {
         width: max-content;
         display: block;

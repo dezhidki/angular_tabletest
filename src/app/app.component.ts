@@ -17,15 +17,15 @@ import {TableModelProvider} from './data-view.component';
         </ul>
         <button (click)="show = true">Show</button>
         <div style="margin: auto">
-            <app-data-view *ngIf="show" [stickyHeader]="true" [modelProvider]="dataProvider" [virtualScrolling]="{
+            <app-data-view *ngIf="show" [modelProvider]="dataProvider" [virtualScrolling]="{
             'enabled': true,
             'viewOverflow': 1}">
                 <thead appFixedData>
-                <th *ngFor="let header of dataCols" style="width: 300px">{{header}}</th>
+                <th *ngFor="let header of dataCols">{{header}}</th>
                 </thead>
                 <tbody appFixedData>
                 <td *ngFor="let header of dataCols">
-                    <input type="text" value="Input {{header}}"/>
+                    <input style="width: 90%; margin: auto; display: block;" type="text" value="Input {{header}}"/>
                 </td>
                 </tbody>
             </app-data-view>

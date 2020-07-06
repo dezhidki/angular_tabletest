@@ -34,8 +34,8 @@ export interface VirtualScrollingOptions {
     viewOverflow: number;
 }
 
-// TODO: In vscroll mode, replace [hidden] with value skip
 // TODO: Handle vscroll mode
+//      * [hidden] is instead list of visible components
 
 @Component({
     selector: 'app-data-view',
@@ -67,11 +67,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @ViewChild('table') table!: ElementRef;
     @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
     @Input() virtualScrolling: VirtualScrollingOptions = {enabled: false, viewOverflow: 0};
-    @Input() stickyHeader = false;
     hiddenRows: Set<number> = new Set<number>();
     hiddenColumns: Set<number> = new Set<number>();
     rowOrder: number[] = [];
-    columnWidths: number[] = [];
     cellValueCache: Record<number, string[]> = {};
 
     scheduledUpdate = false;
@@ -79,7 +77,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     ngOnInit(): void {
         const {rows, columns} = this.modelProvider.getDimension();
         this.rowOrder = [...new Array(rows)].map((val, index) => index);
-        this.columnWidths = Array.from(new Array(columns)).map((v, i) => this.modelProvider.getColumnWidth(i));
     }
 
     ngAfterViewInit(): void {
@@ -197,8 +194,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         });
         const colWidth = this.modelProvider.getColumnWidth(column);
         if (colWidth) {
-            cell.classList.add('fixed-width');
             cell.style.width = `${colWidth}px`;
+            cell.style.overflow = 'hidden';
         }
         if (contents) {
             cell.innerHTML = contents;

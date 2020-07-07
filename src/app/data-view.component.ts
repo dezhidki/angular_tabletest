@@ -112,9 +112,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         requestAnimationFrame(() => {
             this.syncHeaderScroll();
             const newViewport = this.getViewport();
-            const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) + 2 > this.itemsInViewportCount;
+            const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) >= this.itemsInViewportCount;
             if (shouldUpdate) {
-                console.log('Update!');
                 this.updateViewport(newViewport);
             }
             this.scheduledUpdate = false;
@@ -126,7 +125,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const {columns} = this.modelProvider.getDimension();
         for (let rowNumber = 0; rowNumber < this.viewport.count; rowNumber++) {
             const tr = this.rowCache[rowNumber];
-            tr.hidden = false;
             const rowIndex = this.rowOrder[this.viewport.start + rowNumber];
             this.updateRow(tr, rowIndex);
             const rowData = this.getRowValues(rowIndex);
@@ -134,9 +132,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 const td = this.cellCache[rowNumber][columnIndex];
                 this.updateCell(td, rowIndex, columnIndex, rowData[columnIndex]);
             }
-        }
-        for (let rowNumber = this.viewport.count; rowNumber < this.rowCache.length; rowNumber++) {
-            this.rowCache[rowNumber].hidden = true;
         }
         this.viewportScroll = this.viewport.start * this.modelProvider.getRowHeight();
     }
@@ -170,8 +165,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 throw new Error('Virtual scrolling requires to have row height to be set');
             }
             const inViewItemsCount = this.itemsInViewportCount;
-            const start = Math.max(Math.ceil(data.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow, 0);
-            const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows - start);
+            const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows);
+            const start = clamp(Math.ceil(data.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow,
+                0,
+                rows - count);
             return {start, count};
         }
         return {start: 0, count: rows};
@@ -290,4 +287,8 @@ type HTMLKeys<K extends keyof HTMLElementTagNameMap> = Partial<{ [k in keyof HTM
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, opts?: HTMLKeys<K>): HTMLElementTagNameMap[K] {
     return Object.assign(document.createElement(tag), opts);
+}
+
+function clamp(val: number, min: number, max: number): number {
+    return Math.max(Math.min(val, max), min);
 }

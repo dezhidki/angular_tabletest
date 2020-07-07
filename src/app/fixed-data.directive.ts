@@ -6,8 +6,6 @@ import {Directive, ElementRef} from '@angular/core';
 export class FixedDataDirective {
 
     constructor(private el: ElementRef) {
-        const realEl = el.nativeElement as HTMLElement;
-        realEl.classList.add('fixed-data');
     }
 
     setWidth(widths: number[]): void {

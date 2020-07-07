@@ -49,19 +49,19 @@ interface Viewport {
     template: `
         <div class="header" *ngIf="virtualScrolling.enabled" #headerContainer>
             <table>
-                <ng-content *ngTemplateOutlet="outlet"></ng-content>
+                <ng-content *ngTemplateOutlet="headerContent"></ng-content>
             </table>
         </div>
         <div (scroll)="handleScroll()" style="height: 50vh; overflow: scroll;" #dataContainer>
-            <div #tableContainer>
-                <table [class.virtual]="virtualScrolling.enabled">
-                    <ng-container *ngIf="!virtualScrolling.enabled"><ng-content *ngTemplateOutlet="outlet"></ng-content></ng-container>
-                    <tbody class="content" #container>
-                    </tbody>
-                </table>
-            </div>
+            <table [class.virtual]="virtualScrolling.enabled" #tableContainer>
+                <ng-container *ngIf="!virtualScrolling.enabled">
+                    <ng-content *ngTemplateOutlet="headerContent"></ng-content>
+                </ng-container>
+                <tbody class="content" #container>
+                </tbody>
+            </table>
         </div>
-         <ng-template #outlet>
+        <ng-template #headerContent>
             <ng-content></ng-content>
         </ng-template>
     `,

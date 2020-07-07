@@ -5,7 +5,6 @@ import {
     ElementRef,
     Input,
     OnInit, QueryList,
-    Renderer2,
     ViewChild
 } from '@angular/core';
 import * as DOMPurify from 'dompurify';
@@ -69,7 +68,7 @@ interface Viewport {
 })
 export class DataViewComponent implements AfterViewInit, OnInit {
 
-    constructor(private r2: Renderer2) {
+    constructor() {
     }
 
     private get tbody(): HTMLTableSectionElement {

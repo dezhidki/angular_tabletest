@@ -1,3 +1,19 @@
+:host {
+    width: 50vw;
+    display: block;
+}
+
+::ng-deep .header {
+    overflow-x: hidden;
+
+    table {
+        tbody, thead {
+            display: block;
+            width: max-content;
+        }
+    }
+}
+
 :host ::ng-deep .fixed-data {
     & th, & td {
         position: sticky;
@@ -7,27 +23,18 @@
 
 table {
     display: block;
+
     &.scroll {
         overflow: scroll;
     }
 }
 
-::ng-deep table.virtual {
+table.virtual {
     word-break: break-all;
+
     tbody, thead {
         width: max-content;
         display: block;
-        position: relative;
-    }
-
-    tbody, thead {
-        &:not(.content) {
-            z-index: 5;
-        }
-        &.content {
-            z-index: 1;
-            position: relative;
-        }
     }
 }
 

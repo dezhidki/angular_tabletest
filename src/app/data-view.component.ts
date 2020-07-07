@@ -39,13 +39,7 @@ interface Viewport {
     count: number;
 }
 
-// TODO: Redo vscroll mode to consist of two tables instead of one
-//      * Idea (https://uxdesign.cc/position-stuck-96c9f55d9526):
-//           <div #parent>
-//               <div #header>Header</div>
-//               <div #data>Data here</div>
-//           </div>
-//      * Then sync scrolling of both
+
 // TODO: fix shouldUpdate (right now top overflow not detected properly)
 // TODO: Support for hiding rows
 // TODO: Support for row/column span
@@ -53,12 +47,21 @@ interface Viewport {
 @Component({
     selector: 'app-data-view',
     template: `
-        <table (scroll)="handleScroll()" style="width: 50vw; height: 50vh; overflow: scroll;"
-               [class.virtual]="virtualScrolling.enabled" #table>
+        <div class="header" *ngIf="virtualScrolling.enabled" #headerContainer>
+            <table>
+                <ng-content *ngTemplateOutlet="outlet"></ng-content>
+            </table>
+        </div>
+        <div (scroll)="handleScroll()" style="height: 50vh; overflow: scroll;" #dataContainer>
+            <table [class.virtual]="virtualScrolling.enabled" #table>
+                <ng-container *ngIf="!virtualScrolling.enabled"><ng-content *ngTemplateOutlet="outlet"></ng-content></ng-container>
+                <tbody class="content" #container>
+                </tbody>
+            </table>
+        </div>
+         <ng-template #outlet>
             <ng-content></ng-content>
-            <tbody class="content" #container>
-            </tbody>
-        </table>
+        </ng-template>
     `,
     styleUrls: ['./data-view.component.scss']
 })
@@ -78,6 +81,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
     @ViewChild('container') container!: ElementRef;
     @ViewChild('table') table!: ElementRef;
+    @ViewChild('headerContainer') headerEl?: ElementRef;
+    @ViewChild('dataContainer') dataEl?: ElementRef;
     @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
     @Input() virtualScrolling: VirtualScrollingOptions = {enabled: false, viewOverflow: 0};
     hiddenRows: Set<number> = new Set<number>();
@@ -105,7 +110,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         }
         this.scheduledUpdate = true;
         requestAnimationFrame(() => {
-            this.updateStickyHeaders();
+            this.syncHeaderScroll();
             const newViewport = this.getViewport();
             const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) + 2 > this.itemsInViewportCount;
             if (shouldUpdate) {
@@ -136,16 +141,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.viewportScroll = this.viewport.start * this.modelProvider.getRowHeight();
     }
 
-    private updateStickyHeaders(): void {
-        if (this.fixedElements.length === 0 || !this.virtualScrolling.enabled) {
-            return;
-        }
-        const tableEl = this.tableEl;
-        for (const item of this.fixedElements) {
-            item.updateSticky(tableEl);
-        }
-    }
-
     private updateHeaderWidths(): void {
         if (this.fixedElements.length === 0 || !this.virtualScrolling.enabled) {
             return;
@@ -155,6 +150,15 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         for (const item of this.fixedElements) {
             item.setWidth(widths);
         }
+    }
+
+    private syncHeaderScroll(): void {
+        if (!this.headerEl || !this.dataEl) {
+            return;
+        }
+        const header = this.headerEl.nativeElement as HTMLElement;
+        const data = this.dataEl.nativeElement as HTMLElement;
+        header.scrollLeft = data.scrollLeft;
     }
 
     private getViewport(): Viewport {
@@ -180,13 +184,12 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const {rows} = this.modelProvider.getDimension();
         const rowHeight = this.modelProvider.getRowHeight();
         const tableHeight = rows * rowHeight;
-        const tbody = this.tbody;
-        tbody.style.height = `${tableHeight}px`;
+        const table = this.tableEl;
+        table.style.height = `${tableHeight}px`;
         this.viewportScroll = start * rowHeight;
     }
 
     buildTable(): void {
-        this.updateStickyHeaders();
         this.updateHeaderWidths();
         const tbody = this.tbody;
 
@@ -271,11 +274,15 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private get itemsInViewportCount(): number {
-        return Math.ceil(this.tableEl.clientHeight / this.modelProvider.getRowHeight());
+        return Math.ceil(this.contentEl.clientHeight / this.modelProvider.getRowHeight());
     }
 
     private set viewportScroll(y: number) {
         this.tbody.style.transform = `translateY(${y}px)`;
+    }
+
+    private get contentEl(): HTMLElement {
+        return this.dataEl.nativeElement as HTMLElement;
     }
 }
 

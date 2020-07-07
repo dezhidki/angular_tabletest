@@ -67,18 +67,6 @@ interface Viewport {
     styleUrls: ['./data-view.component.scss']
 })
 export class DataViewComponent implements AfterViewInit, OnInit {
-
-    constructor() {
-    }
-
-    private get tbody(): HTMLTableSectionElement {
-        return this.container.nativeElement as HTMLTableSectionElement;
-    }
-
-    private get tableContainerEl(): HTMLElement {
-        return this.tableContainer.nativeElement as HTMLElement;
-    }
-
     @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
     @ViewChild('container') container!: ElementRef;
     @ViewChild('tableContainer') tableContainer!: ElementRef;
@@ -95,6 +83,17 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     scheduledUpdate = false;
     private viewport: Viewport = {start: 0, count: 0};
+
+    constructor() {
+    }
+
+    private get tbody(): HTMLTableSectionElement {
+        return this.container.nativeElement as HTMLTableSectionElement;
+    }
+
+    private get tableContainerEl(): HTMLElement {
+        return this.tableContainer.nativeElement as HTMLElement;
+    }
 
     ngOnInit(): void {
         const {rows} = this.modelProvider.getDimension();

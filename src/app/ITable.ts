@@ -1,5 +1,5 @@
-import {TableModelProvider} from "./data-view.component";
-import {COLS, DATA, ROWS} from "./data";
+import {TableModelProvider} from './data-view.component';
+import {COLS, DATA, ROWS} from './data';
 
 function rainbow(numOfSteps, step): string {
     let r = 0;
@@ -67,7 +67,7 @@ export class TestTableProvider implements TableModelProvider {
     }
 
     getRowHeight(): number | undefined {
-        return 50;
+        return 20;
     }
 
     handleClickCell(rowIndex: number, columnIndex: number): void {

@@ -19,7 +19,8 @@ import {TableModelProvider} from './data-view.component';
         <div style="margin: auto">
             <app-data-view *ngIf="show" [modelProvider]="dataProvider" [virtualScrolling]="{
             'enabled': true,
-            'viewOverflow': 1}">
+            'viewOverflow': 1,
+            'borderSpacing': 2}">
                 <thead appFixedData>
                 <th *ngFor="let header of dataCols">{{header}}</th>
                 </thead>

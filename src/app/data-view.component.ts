@@ -2,7 +2,7 @@ import {
     AfterViewInit,
     Component,
     ContentChildren,
-    ElementRef,
+    ElementRef, HostListener,
     Input,
     OnInit, QueryList,
     ViewChild
@@ -36,10 +36,10 @@ export interface VirtualScrollingOptions {
 interface Viewport {
     start: number;
     count: number;
+    paddedStart: number;
 }
 
-
-// TODO: fix shouldUpdate (right now top overflow not detected properly)
+// TODO: Scrolling too fast can cause viewport to start/end too early/late
 // TODO: Support for hiding rows
 // TODO: Support for row/column span
 
@@ -80,9 +80,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     cellValueCache: Record<number, string[]> = {};
     cellCache: HTMLTableDataCellElement[][] = [];
     rowCache: HTMLTableRowElement[] = [];
+    activeRowCount = 0;
 
     scheduledUpdate = false;
-    private viewport: Viewport = {start: 0, count: 0};
+    private viewport: Viewport = {start: 0, count: 0, paddedStart: 0};
 
     constructor() {
     }
@@ -104,6 +105,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.buildTable();
     }
 
+    @HostListener('window:resize')
+    handleWindowResize(): void {
+        this.updateViewport();
+    }
+
     handleScroll(): void {
         if (!this.virtualScrolling.enabled || this.scheduledUpdate) {
             return;
@@ -111,20 +117,58 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.scheduledUpdate = true;
         requestAnimationFrame(() => {
             this.syncHeaderScroll();
-            const newViewport = this.getViewport();
-            const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) >= this.itemsInViewportCount;
-            if (shouldUpdate) {
-                this.updateViewport(newViewport);
-            }
+            this.updateViewport();
             this.scheduledUpdate = false;
         });
     }
 
-    private updateViewport(newViewport: Viewport): void {
+    private updateViewportSlots(): boolean {
+        const rowDelta = this.rowsInVirtualTable - this.activeRowCount;
+        if (rowDelta > 0) {
+            // Too few rows => grow
+            // Readd possible hidden rows
+            for (let rowNumber = this.activeRowCount; rowNumber < this.rowCache.length; rowNumber++) {
+                this.rowCache[rowNumber].hidden = false;
+            }
+            const rowsToAdd = rowDelta - (this.rowCache.length - this.activeRowCount);
+            const tbody = this.tbody;
+            const {columns} = this.modelProvider.getDimension();
+            for (let rowNumber = 0; rowNumber < rowsToAdd; rowNumber++) {
+                const tr = document.createElement('tr');
+                const cache = [];
+                this.rowCache.push(tr);
+                this.cellCache.push(cache);
+                for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
+                    cache.push(tr.appendChild(document.createElement('td')));
+                }
+                tbody.appendChild(tr);
+            }
+            this.activeRowCount = this.rowCache.length;
+            return true;
+        } else if (rowDelta < 0) {
+            // Too many rows => hide unused ones
+            for (let rowNumber = this.rowCache.length + rowDelta; rowNumber < this.rowCache.length; rowNumber++) {
+                this.rowCache[rowNumber].hidden = true;
+            }
+            this.activeRowCount = this.rowCache.length + rowDelta;
+            return true;
+        }
+        return false;
+    }
+
+    private updateViewport(): void {
+        const newViewport = this.getViewport();
+        const itemsInViewPortCount = this.itemsInViewportCount;
+        const shouldUpdate = Math.abs(newViewport.start - this.viewport.start) >= itemsInViewPortCount;
+        if (!shouldUpdate && !this.updateViewportSlots()) {
+            return;
+        }
+        console.log(`Update (old: ${this.viewport.paddedStart}, new: ${newViewport.paddedStart}; start: ${newViewport.start})`);
         this.viewport = newViewport;
         const {columns} = this.modelProvider.getDimension();
         for (let rowNumber = 0; rowNumber < this.viewport.count; rowNumber++) {
             const tr = this.rowCache[rowNumber];
+            tr.hidden = false;
             const rowIndex = this.rowOrder[this.viewport.start + rowNumber];
             this.updateRow(tr, rowIndex);
             const rowData = this.getRowValues(rowIndex);
@@ -132,6 +176,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 const td = this.cellCache[rowNumber][columnIndex];
                 this.updateCell(td, rowIndex, columnIndex, rowData[columnIndex]);
             }
+        }
+        for (let rowNumber = this.viewport.count; rowNumber < this.rowCache.length; rowNumber++) {
+            this.rowCache[rowNumber].hidden = true;
         }
         this.viewportScroll = this.viewport.start * this.modelProvider.getRowHeight();
     }
@@ -169,9 +216,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             const start = clamp(Math.ceil(data.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow,
                 0,
                 rows - count);
-            return {start, count};
+            // Pad the real start to begin at the nearest viewport block
+            const paddedStart = Math.floor(start / inViewItemsCount) * inViewItemsCount;
+            return {start, count, paddedStart};
         }
-        return {start: 0, count: rows};
+        return {start: 0, count: rows, paddedStart: 0};
     }
 
     private prepareTable(start: number): void {
@@ -204,6 +253,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             }
             tbody.appendChild(tr);
         }
+        this.activeRowCount = this.rowCache.length;
         // Optimization: sanitize whole tbody in place
         if (!this.virtualScrolling.enabled) {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
@@ -272,6 +322,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     private get itemsInViewportCount(): number {
         return Math.ceil(this.dataContainer.clientHeight / this.modelProvider.getRowHeight());
+    }
+
+    private get rowsInVirtualTable(): number {
+        const {rows} = this.modelProvider.getDimension();
+        return Math.min(this.itemsInViewportCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows);
     }
 
     private set viewportScroll(y: number) {

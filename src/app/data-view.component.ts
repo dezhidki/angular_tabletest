@@ -53,11 +53,13 @@ interface Viewport {
             </table>
         </div>
         <div (scroll)="handleScroll()" style="height: 50vh; overflow: scroll;" #dataContainer>
-            <table [class.virtual]="virtualScrolling.enabled" #table>
-                <ng-container *ngIf="!virtualScrolling.enabled"><ng-content *ngTemplateOutlet="outlet"></ng-content></ng-container>
-                <tbody class="content" #container>
-                </tbody>
-            </table>
+            <div #tableContainer>
+                <table [class.virtual]="virtualScrolling.enabled">
+                    <ng-container *ngIf="!virtualScrolling.enabled"><ng-content *ngTemplateOutlet="outlet"></ng-content></ng-container>
+                    <tbody class="content" #container>
+                    </tbody>
+                </table>
+            </div>
         </div>
          <ng-template #outlet>
             <ng-content></ng-content>
@@ -74,13 +76,13 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         return this.container.nativeElement as HTMLTableSectionElement;
     }
 
-    private get tableEl(): HTMLTableElement {
-        return this.table.nativeElement as HTMLTableElement;
+    private get tableContainerEl(): HTMLElement {
+        return this.tableContainer.nativeElement as HTMLElement;
     }
 
     @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
     @ViewChild('container') container!: ElementRef;
-    @ViewChild('table') table!: ElementRef;
+    @ViewChild('tableContainer') tableContainer!: ElementRef;
     @ViewChild('headerContainer') headerEl?: ElementRef;
     @ViewChild('dataContainer') dataEl?: ElementRef;
     @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
@@ -162,7 +164,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private getViewport(): Viewport {
-        const table = this.tableEl;
+        const data = this.dataContainer;
         const {rows} = this.modelProvider.getDimension();
         if (this.virtualScrolling.enabled) {
             const itemHeight = this.modelProvider.getRowHeight();
@@ -170,7 +172,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 throw new Error('Virtual scrolling requires to have row height to be set');
             }
             const inViewItemsCount = this.itemsInViewportCount;
-            const start = Math.max(Math.ceil(table.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow, 0);
+            const start = Math.max(Math.ceil(data.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow, 0);
             const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows - start);
             return {start, count};
         }
@@ -184,7 +186,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const {rows} = this.modelProvider.getDimension();
         const rowHeight = this.modelProvider.getRowHeight();
         const tableHeight = rows * rowHeight;
-        const table = this.tableEl;
+        const table = this.tableContainerEl;
         table.style.height = `${tableHeight}px`;
         this.viewportScroll = start * rowHeight;
     }
@@ -274,14 +276,14 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private get itemsInViewportCount(): number {
-        return Math.ceil(this.contentEl.clientHeight / this.modelProvider.getRowHeight());
+        return Math.ceil(this.dataContainer.clientHeight / this.modelProvider.getRowHeight());
     }
 
     private set viewportScroll(y: number) {
         this.tbody.style.transform = `translateY(${y}px)`;
     }
 
-    private get contentEl(): HTMLElement {
+    private get dataContainer(): HTMLElement {
         return this.dataEl.nativeElement as HTMLElement;
     }
 }

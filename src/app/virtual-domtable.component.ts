@@ -32,7 +32,7 @@ import * as DOMPurify from 'dompurify';
 })
 export class VirtualDOMTableComponent extends ITable {
     itemHeight = 50;
-    itemPadding = 1;
+    itemPadding = 10;
     itemWidth = 200;
     @ViewChild('content') content: ElementRef;
     purifiedDataCache: Record<number, string[]> = {};
@@ -118,7 +118,7 @@ export class VirtualDOMTableComponent extends ITable {
         table.style.tableLayout = 'fixed';
         table.style.width = '100%';
         this.tableBody = table.appendChild(document.createElement('tbody'));
-        table.style.transform = `translateY(${offsetY}px)`;
+        this.tableBody.style.transform = `translateY(${offsetY}px)`;
 
         for (let row = start; row < start + itemCount; row++) {
             const rowStart = Object.assign(document.createElement('tr'), {

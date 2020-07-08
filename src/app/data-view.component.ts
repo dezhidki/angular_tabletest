@@ -40,6 +40,8 @@ interface Viewport {
     paddedStart: number;
 }
 
+// TODO: Don't draw when fast scrolling?
+// TODO: Add ID + checkbox cols
 // TODO: Support for hiding rows
 // TODO: Support for row/column span
 
@@ -81,7 +83,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     cellCache: HTMLTableDataCellElement[][] = [];
     rowCache: HTMLTableRowElement[] = [];
     activeRowCount = 0;
-
+    instantRefresh = false;
     scheduledUpdate = false;
     private viewport: Viewport = {start: 0, count: 0, paddedStart: 0};
 
@@ -110,8 +112,13 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         runMultiFrame(this.updateViewport());
     }
 
+
     handleScroll(): void {
-        if (!this.virtualScrolling.enabled || this.scheduledUpdate) {
+        if (!this.virtualScrolling.enabled) {
+            return;
+        }
+        if (this.scheduledUpdate) {
+            this.instantRefresh = true;
             return;
         }
         this.scheduledUpdate = true;
@@ -153,7 +160,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private* updateViewport(): Generator {
-        yield;
         this.syncHeaderScroll();
         const newViewport = this.getViewport();
         const itemsInViewPortCount = this.itemsInViewportCount;
@@ -170,6 +176,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const offset = itemsInViewPortCount * this.virtualScrolling.viewOverflow;
         const visibleStart = this.viewport.start + offset;
         const render = (renderStart: number, dataStart: number, count: number) => {
+            count = clamp(count, 0, this.viewport.count - renderStart);
             for (let rowNumber = 0; rowNumber < count; rowNumber++) {
                 const tr = this.rowCache[rowNumber + renderStart];
                 tr.hidden = false;
@@ -194,6 +201,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             this.rowCache[rowNumber].hidden = true;
         }
         this.scheduledUpdate = false;
+        if (this.instantRefresh) {
+            this.instantRefresh = false;
+            this.handleScroll();
+        }
     }
 
     private updateHeaderWidths(): void {

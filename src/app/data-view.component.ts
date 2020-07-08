@@ -124,7 +124,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     private updateViewportSlots(viewport: Viewport): boolean {
         const rowDelta = viewport.count - this.activeRowCount;
-        console.log(rowDelta);
         if (rowDelta > 0) {
             // Too few rows => grow
             // Readd possible hidden rows

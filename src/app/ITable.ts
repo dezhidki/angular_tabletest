@@ -67,7 +67,7 @@ export class TestTableProvider implements TableModelProvider {
     }
 
     getRowHeight(): number | undefined {
-        return 20;
+        return 50;
     }
 
     handleClickCell(rowIndex: number, columnIndex: number): void {

@@ -160,7 +160,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     private updateViewport(): void {
         const newViewport = this.getViewport();
         const itemsInViewPortCount = this.itemsInViewportCount;
-        const shouldUpdate = Math.abs(newViewport.paddedStart - this.viewport.paddedStart) >= itemsInViewPortCount;
+        const shouldUpdate = Math.abs(newViewport.paddedStart - this.viewport.paddedStart)
+            >= itemsInViewPortCount * this.virtualScrolling.viewOverflow;
         const needsResize = this.updateViewportSlots(newViewport);
         if (!shouldUpdate && !needsResize) {
             return;
@@ -331,7 +332,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private get itemsInViewportCount(): number {
-        return Math.ceil( this.viewportHeight / this.rowHeight);
+        return Math.ceil(this.viewportHeight / this.rowHeight);
     }
 
     private get rowsInVirtualTable(): number {

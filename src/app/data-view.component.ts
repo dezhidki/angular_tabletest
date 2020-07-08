@@ -107,7 +107,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     @HostListener('window:resize')
     handleWindowResize(): void {
-        this.updateViewport();
+        runMultiFrame(this.updateViewport());
     }
 
     handleScroll(): void {
@@ -115,11 +115,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             return;
         }
         this.scheduledUpdate = true;
-        requestAnimationFrame(() => {
-            this.syncHeaderScroll();
-            this.updateViewport();
-            this.scheduledUpdate = false;
-        });
+        runMultiFrame(this.updateViewport());
     }
 
     private updateViewportSlots(viewport: Viewport): boolean {
@@ -156,32 +152,48 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         return false;
     }
 
-    private updateViewport(): void {
+    private* updateViewport(): Generator {
+        yield;
+        this.syncHeaderScroll();
         const newViewport = this.getViewport();
         const itemsInViewPortCount = this.itemsInViewportCount;
         const shouldUpdate = Math.abs(newViewport.paddedStart - this.viewport.paddedStart)
             >= itemsInViewPortCount * this.virtualScrolling.viewOverflow;
         const needsResize = this.updateViewportSlots(newViewport);
         if (!shouldUpdate && !needsResize) {
+            this.scheduledUpdate = false;
             return;
         }
         this.viewport = newViewport;
+        this.viewportScroll = this.viewport.paddedStart * this.rowHeight;
         const {columns} = this.modelProvider.getDimension();
-        for (let rowNumber = 0; rowNumber < this.viewport.count; rowNumber++) {
-            const tr = this.rowCache[rowNumber];
-            tr.hidden = false;
-            const rowIndex = this.rowOrder[this.viewport.paddedStart + rowNumber];
-            this.updateRow(tr, rowIndex);
-            const rowData = this.getRowValues(rowIndex);
-            for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
-                const td = this.cellCache[rowNumber][columnIndex];
-                this.updateCell(td, rowIndex, columnIndex, rowData[columnIndex]);
+        const offset = itemsInViewPortCount * this.virtualScrolling.viewOverflow;
+        const visibleStart = this.viewport.start + offset;
+        const render = (renderStart: number, dataStart: number, count: number) => {
+            for (let rowNumber = 0; rowNumber < count; rowNumber++) {
+                const tr = this.rowCache[rowNumber + renderStart];
+                tr.hidden = false;
+                const rowIndex = this.rowOrder[dataStart + rowNumber];
+                this.updateRow(tr, rowIndex);
+                const rowData = this.getRowValues(rowIndex);
+                for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
+                    const td = this.cellCache[rowNumber + renderStart][columnIndex];
+                    this.updateCell(td, rowIndex, columnIndex, rowData[columnIndex]);
+                }
             }
-        }
+        };
+        const visStart = offset + (this.viewport.start - this.viewport.paddedStart);
+        render(visStart - 1, visibleStart - 1, itemsInViewPortCount + 2);
+        yield;
+        render(0, this.viewport.paddedStart, visibleStart - this.viewport.paddedStart);
+        yield;
+        const visiblePartEnd = visibleStart + itemsInViewPortCount;
+        render(visStart + itemsInViewPortCount, visiblePartEnd, this.viewport.paddedStart + this.viewport.count - visiblePartEnd);
+        yield;
         for (let rowNumber = this.viewport.count; rowNumber < this.rowCache.length; rowNumber++) {
             this.rowCache[rowNumber].hidden = true;
         }
-        this.viewportScroll = this.viewport.paddedStart * this.rowHeight;
+        this.scheduledUpdate = false;
     }
 
     private updateHeaderWidths(): void {
@@ -356,4 +368,20 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, opts?: HTMLKeys<K>): 
 
 function clamp(val: number, min: number, max: number): number {
     return Math.max(Math.min(val, max), min);
+}
+
+function runMultiFrame(iter: Generator): void {
+    const cb = () => {
+        const result = iter.next();
+        if (!result.done) {
+            requestAnimationFrame(cb);
+        }
+    };
+    requestAnimationFrame(cb);
+}
+
+function waitForFrame(): Promise<void> {
+    return new Promise<void>(r => requestAnimationFrame(() => {
+        r();
+    }));
 }

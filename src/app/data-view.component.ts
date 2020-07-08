@@ -122,8 +122,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         });
     }
 
-    private updateViewportSlots(): boolean {
-        const rowDelta = this.rowsInVirtualTable - this.activeRowCount;
+    private updateViewportSlots(viewport: Viewport): boolean {
+        const rowDelta = viewport.count - this.activeRowCount;
+        console.log(rowDelta);
         if (rowDelta > 0) {
             // Too few rows => grow
             // Readd possible hidden rows
@@ -160,10 +161,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const newViewport = this.getViewport();
         const itemsInViewPortCount = this.itemsInViewportCount;
         const shouldUpdate = Math.abs(newViewport.paddedStart - this.viewport.paddedStart) >= itemsInViewPortCount;
-        if (!shouldUpdate && !this.updateViewportSlots()) {
+        const needsResize = this.updateViewportSlots(newViewport);
+        if (!shouldUpdate && !needsResize) {
             return;
         }
-        console.log(`Update (old: ${this.viewport.paddedStart}, new: ${newViewport.paddedStart}; start: ${newViewport.start})`);
         this.viewport = newViewport;
         const {columns} = this.modelProvider.getDimension();
         for (let rowNumber = 0; rowNumber < this.viewport.count; rowNumber++) {
@@ -212,7 +213,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 throw new Error('Virtual scrolling requires to have row height to be set');
             }
             const inViewItemsCount = this.itemsInViewportCount;
-            const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow), rows);
+            const count = Math.min(inViewItemsCount * (1 + 2 * this.virtualScrolling.viewOverflow) + rows % inViewItemsCount, rows);
             const start = clamp(Math.ceil(data.scrollTop / itemHeight) - inViewItemsCount * this.virtualScrolling.viewOverflow,
                 0,
                 rows - count);

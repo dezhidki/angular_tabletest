@@ -62,11 +62,11 @@ export class TestTableProvider implements TableModelProvider {
         return {columns: COLS, rows: ROWS};
     }
 
-    getRowContents(rowIndex: number): string[] {
-        return DATA[rowIndex];
+    getCellContents(rowIndex: number, columnIndex: number): string {
+        return DATA[rowIndex][columnIndex];
     }
 
-    getRowHeight(): number | undefined {
+    getRowHeight(rowIndex: number): number | undefined {
         return 50;
     }
 

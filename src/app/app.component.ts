@@ -1,7 +1,7 @@
 import {Component} from '@angular/core';
 import {COLS, DATA, ROWS} from './data';
 import {ITable, TestTableProvider} from './ITable';
-import {TableModelProvider} from './data-view.component';
+import {TableModelProvider, VirtualScrollingOptions} from './data-view.component';
 
 @Component({
     selector: 'app-root',
@@ -17,10 +17,7 @@ import {TableModelProvider} from './data-view.component';
         </ul>
         <button (click)="show = true">Show</button>
         <div style="margin: auto">
-            <app-data-view *ngIf="show" [modelProvider]="dataProvider" [virtualScrolling]="{
-            'enabled': true,
-            'viewOverflow': 2,
-            'borderSpacing': 2}">
+            <app-data-view *ngIf="show" [modelProvider]="dataProvider" [virtualScrolling]="opts">
                 <thead appFixedData>
                 <th *ngFor="let header of dataCols">{{header}}</th>
                 </thead>
@@ -171,6 +168,14 @@ import {TableModelProvider} from './data-view.component';
     styleUrls: ['./app.component.css']
 })
 export class AppComponent {
+    opts: VirtualScrollingOptions = {
+        enabled: true,
+        borderSpacing: 2,
+        viewOverflow: {
+            vertical: 1,
+            horizontal: 1
+        }
+    };
     dataCols = Array.from(new Array(COLS)).map((_, i) => i);
     show = false;
     dataProvider: TableModelProvider = new TestTableProvider();

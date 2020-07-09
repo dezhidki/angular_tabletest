@@ -1,13 +1,14 @@
 import {
     AfterViewInit,
-    ChangeDetectionStrategy,
     Component,
     ContentChildren,
-    ElementRef, HostBinding,
-    HostListener,
-    Input, NgZone,
+    ElementRef,
+    HostBinding,
+    Input,
+    NgZone,
     OnInit,
-    QueryList, Renderer2,
+    QueryList,
+    Renderer2,
     ViewChild
 } from '@angular/core';
 import * as DOMPurify from 'dompurify';
@@ -37,10 +38,15 @@ export interface VirtualScrollingOptions {
     borderSpacing: number;
 }
 
-interface Viewport {
+interface ViewportPosition {
     start: number;
-    count: number;
     paddedStart: number;
+    count: number;
+}
+
+interface Viewport {
+    horizontal: ViewportPosition;
+    vertical: ViewportPosition;
 }
 
 // TODO: Don't draw when fast scrolling?
@@ -96,7 +102,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     activeRowCount = 0;
     instantRefresh = false;
     scheduledUpdate = false;
-    private viewport: Viewport = {start: 0, count: 0, paddedStart: 0};
+    private viewport: Viewport = {
+        horizontal: {start: 0, count: 0, paddedStart: 0},
+        vertical: {start: 0, count: 0, paddedStart: 0}
+    };
 
     constructor(private r2: Renderer2, private zone: NgZone) {
     }
@@ -137,7 +146,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         runMultiFrame(this.updateViewport());
     }
 
-
     handleScroll(): void {
         if (this.scheduledUpdate) {
             this.instantRefresh = true;
@@ -148,7 +156,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private updateViewportSlots(viewport: Viewport): boolean {
-        const rowDelta = viewport.count - this.activeRowCount;
+        const rowDelta = viewport.vertical.count - this.activeRowCount;
         if (rowDelta > 0) {
             // Too few rows => grow
             // Readd possible hidden rows
@@ -185,7 +193,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.syncHeaderScroll();
         const newViewport = this.getViewport();
         const itemsInViewPortCount = this.itemsInViewportCount;
-        const shouldUpdate = Math.abs(newViewport.paddedStart - this.viewport.paddedStart)
+        const shouldUpdate = Math.abs(newViewport.vertical.paddedStart - this.viewport.vertical.paddedStart)
             >= itemsInViewPortCount * this.virtualScrolling.viewOverflow;
         const needsResize = this.updateViewportSlots(newViewport);
         if (!shouldUpdate && !needsResize) {
@@ -193,12 +201,12 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             return;
         }
         this.viewport = newViewport;
-        this.viewportScroll = this.viewport.paddedStart * this.rowHeight;
+        this.viewportScroll = this.viewport.vertical.paddedStart * this.rowHeight;
         const {columns} = this.modelProvider.getDimension();
         const offset = itemsInViewPortCount * this.virtualScrolling.viewOverflow;
-        const visibleStart = this.viewport.start + offset;
+        const visibleStart = this.viewport.vertical.start + offset;
         const render = (renderStart: number, dataStart: number, count: number) => {
-            count = clamp(count, 0, this.viewport.count - renderStart);
+            count = clamp(count, 0, this.viewport.vertical.count - renderStart);
             for (let rowNumber = 0; rowNumber < count; rowNumber++) {
                 const tr = this.rowCache[rowNumber + renderStart];
                 tr.hidden = false;
@@ -211,15 +219,15 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 }
             }
         };
-        const visStart = offset + (this.viewport.start - this.viewport.paddedStart);
+        const visStart = offset + (this.viewport.vertical.start - this.viewport.vertical.paddedStart);
         render(visStart - 1, visibleStart - 1, itemsInViewPortCount + 2);
         yield;
-        render(0, this.viewport.paddedStart, visibleStart - this.viewport.paddedStart);
+        render(0, this.viewport.vertical.paddedStart, visibleStart - this.viewport.vertical.paddedStart);
         yield;
         const visiblePartEnd = visibleStart + itemsInViewPortCount;
-        render(visStart + itemsInViewPortCount, visiblePartEnd, this.viewport.paddedStart + this.viewport.count - visiblePartEnd);
+        render(visStart + itemsInViewPortCount, visiblePartEnd, this.viewport.vertical.paddedStart + this.viewport.vertical.count - visiblePartEnd);
         yield;
-        for (let rowNumber = this.viewport.count; rowNumber < this.rowCache.length; rowNumber++) {
+        for (let rowNumber = this.viewport.vertical.count; rowNumber < this.rowCache.length; rowNumber++) {
             this.rowCache[rowNumber].hidden = true;
         }
         this.scheduledUpdate = false;
@@ -266,9 +274,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 rows - count);
             // Pad the real start to begin at the nearest viewport block
             const paddedStart = Math.floor(start / inViewItemsCount) * inViewItemsCount;
-            return {start, count, paddedStart};
+            return {vertical: {start, count, paddedStart}, horizontal: {start: 0, paddedStart: 0, count: 0}};
         }
-        return {start: 0, count: rows, paddedStart: 0};
+        return {vertical: {start: 0, count: rows, paddedStart: 0}, horizontal: {start: 0, count: rows, paddedStart: 0}};
     }
 
     private prepareTable(start: number): void {
@@ -290,11 +298,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
         const {columns} = this.modelProvider.getDimension();
         this.viewport = this.getViewport();
-        const {start, count} = this.viewport;
-        this.prepareTable(start);
+        const {vertical} = this.viewport;
+        this.prepareTable(vertical.start);
 
-        for (let rowNumber = 0; rowNumber < count; rowNumber++) {
-            const rowIndex = this.rowOrder[start + rowNumber];
+        for (let rowNumber = 0; rowNumber < vertical.count; rowNumber++) {
+            const rowIndex = this.rowOrder[vertical.start + rowNumber];
             const tr = this.makeRow(rowIndex);
             const rowData = this.getRowValues(rowIndex);
             for (let columnIndex = 0; columnIndex < columns; columnIndex++) {

@@ -3,7 +3,7 @@ import {
     ChangeDetectionStrategy,
     Component,
     ContentChildren,
-    ElementRef,
+    ElementRef, HostBinding,
     HostListener,
     Input, NgZone,
     OnInit,
@@ -51,12 +51,17 @@ interface Viewport {
 @Component({
     selector: 'app-data-view',
     template: `
-        <div class="header" *ngIf="virtualScrolling.enabled" #headerContainer>
-            <table>
-                <ng-content *ngTemplateOutlet="headerContent"></ng-content>
-            </table>
-        </div>
-        <div style="height: 50vh; overflow: scroll;" #dataContainer>
+        <ng-container *ngIf="virtualScrolling.enabled">
+            <div class="header" #headerContainer>
+                <table>
+                    <ng-content *ngTemplateOutlet="headerContent"></ng-content>
+                </table>
+            </div>
+            <div class="ids">
+                wew
+            </div>
+        </ng-container>
+        <div class="data" style="height: 50vh; overflow: scroll;" #dataContainer>
             <table [class.virtual]="virtualScrolling.enabled" #tableContainer>
                 <ng-container *ngIf="!virtualScrolling.enabled">
                     <ng-content *ngTemplateOutlet="headerContent"></ng-content>
@@ -79,6 +84,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @ViewChild('dataContainer') dataEl?: ElementRef;
     @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
     @Input() virtualScrolling: VirtualScrollingOptions = {enabled: false, viewOverflow: 0, borderSpacing: 2};
+    @HostBinding('class.virtual') virtual = false;
     hiddenRows: Set<number> = new Set<number>();
     hiddenColumns: Set<number> = new Set<number>();
     rowOrder: number[] = [];
@@ -102,6 +108,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     ngOnInit(): void {
+        this.virtual = this.virtualScrolling.enabled;
         const {rows} = this.modelProvider.getDimension();
         this.rowOrder = Array.from(new Array(rows)).map((val, index) => index);
     }

@@ -1,9 +1,18 @@
 :host {
     display: block;
+
+    &.virtual {
+        display: grid;
+        grid-template:
+            ". header" auto
+            "ids content" auto
+            / auto auto;
+    }
 }
 
 ::ng-deep .header {
     overflow-x: hidden;
+    grid-area: header;
 
     table {
         tbody, thead {
@@ -11,6 +20,14 @@
             width: max-content;
         }
     }
+}
+
+.ids {
+    grid-area: ids;
+}
+
+.data {
+    grid-area: content;
 }
 
 table {

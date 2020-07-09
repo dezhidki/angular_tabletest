@@ -6,7 +6,7 @@
         grid-template:
             ". header" auto
             "ids content" auto
-            / auto auto;
+            / max-content auto;
     }
 }
 
@@ -24,6 +24,7 @@
 
 .ids {
     grid-area: ids;
+    overflow-y: hidden;
 }
 
 .data {

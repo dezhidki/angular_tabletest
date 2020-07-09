@@ -57,8 +57,8 @@ interface Viewport {
                     <ng-content *ngTemplateOutlet="headerContent"></ng-content>
                 </table>
             </div>
-            <div class="ids">
-                wew
+            <div class="ids" #idsContainer>
+                <table #idTable></table>
             </div>
         </ng-container>
         <div class="data" style="height: 50vh; overflow: scroll;" #dataContainer>
@@ -82,6 +82,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @ViewChild('tableContainer') tableContainer!: ElementRef;
     @ViewChild('headerContainer') headerEl?: ElementRef;
     @ViewChild('dataContainer') dataEl?: ElementRef;
+    @ViewChild('idTable') idTable?: ElementRef;
+    @ViewChild('idsContainer') idsContainer?: ElementRef;
     @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
     @Input() virtualScrolling: VirtualScrollingOptions = {enabled: false, viewOverflow: 0, borderSpacing: 2};
     @HostBinding('class.virtual') virtual = false;
@@ -124,19 +126,19 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             this.zone.runOutsideAngular(() => {
                 this.r2.listen(this.dataEl.nativeElement, 'scroll', () => this.handleScroll());
             });
+            this.zone.runOutsideAngular(() => {
+                window.addEventListener('resize', () => this.handleWindowResize());
+            });
         }
     }
 
-    @HostListener('window:resize')
     handleWindowResize(): void {
+        this.updateHeaderIdsSizes();
         runMultiFrame(this.updateViewport());
     }
 
 
     handleScroll(): void {
-        if (!this.virtualScrolling.enabled) {
-            return;
-        }
         if (this.scheduledUpdate) {
             this.instantRefresh = true;
             return;
@@ -244,7 +246,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         }
         const header = this.headerEl.nativeElement as HTMLElement;
         const data = this.dataEl.nativeElement as HTMLElement;
+        const ids = this.idsContainer.nativeElement as HTMLElement;
         header.scrollLeft = data.scrollLeft;
+        ids.scrollTop = data.scrollTop;
     }
 
     private getViewport(): Viewport {
@@ -303,10 +307,40 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         if (!this.virtualScrolling.enabled) {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
         }
+        if (this.idTable) {
+            this.buildIdTable(this.idTable.nativeElement);
+        }
+        this.updateHeaderIdsSizes();
+    }
+
+    private updateHeaderIdsSizes(): void {
+        const data = this.dataEl.nativeElement as HTMLElement;
+        const header = this.headerEl.nativeElement as HTMLElement;
+        const ids = this.idsContainer.nativeElement as HTMLElement;
+        header.style.width = `${data.clientWidth}px`;
+        ids.style.height = `${data.clientHeight}px`;
+    }
+
+    private buildIdTable(table: HTMLTableElement): void {
+        const {rows} = this.modelProvider.getDimension();
+        const tbody = el('tbody');
+        const rowHeight = this.modelProvider.getRowHeight();
+
+        for (let row = 0; row < rows; row++) {
+            const tr = tbody.appendChild(el('tr'));
+            tr.style.height = `${rowHeight}px`;
+            tr.appendChild(el('td', {
+                textContent: `${row}`
+            }));
+            tr.appendChild(el('td')).appendChild(el('input', {
+                type: 'checkbox'
+            }));
+        }
+        table.appendChild(tbody);
     }
 
     private makeRow(row: number): HTMLTableRowElement {
-        const rowEl = this.updateRow(document.createElement('tr'), row);
+        const rowEl = this.updateRow(el('tr'), row);
         if (this.virtualScrolling.enabled) {
             this.cellCache.push([]);
             this.rowCache.push(rowEl);
@@ -328,7 +362,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private makeCell(row: number, column: number, contents?: string): HTMLTableDataCellElement {
-        const cell = this.updateCell(document.createElement('td'), row, column, contents);
+        const cell = this.updateCell(el('td'), row, column, contents);
         if (this.virtualScrolling.enabled) {
             const cur = this.cellCache[this.cellCache.length - 1];
             cur.push(cell);

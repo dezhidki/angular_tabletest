@@ -1,10 +1,13 @@
 import {
     AfterViewInit,
+    ChangeDetectionStrategy,
     Component,
     ContentChildren,
-    ElementRef, HostListener,
-    Input,
-    OnInit, QueryList,
+    ElementRef,
+    HostListener,
+    Input, NgZone,
+    OnInit,
+    QueryList, Renderer2,
     ViewChild
 } from '@angular/core';
 import * as DOMPurify from 'dompurify';
@@ -53,7 +56,7 @@ interface Viewport {
                 <ng-content *ngTemplateOutlet="headerContent"></ng-content>
             </table>
         </div>
-        <div (scroll)="handleScroll()" style="height: 50vh; overflow: scroll;" #dataContainer>
+        <div style="height: 50vh; overflow: scroll;" #dataContainer>
             <table [class.virtual]="virtualScrolling.enabled" #tableContainer>
                 <ng-container *ngIf="!virtualScrolling.enabled">
                     <ng-content *ngTemplateOutlet="headerContent"></ng-content>
@@ -87,7 +90,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     scheduledUpdate = false;
     private viewport: Viewport = {start: 0, count: 0, paddedStart: 0};
 
-    constructor() {
+    constructor(private r2: Renderer2, private zone: NgZone) {
     }
 
     private get tbody(): HTMLTableSectionElement {
@@ -105,6 +108,16 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     ngAfterViewInit(): void {
         this.buildTable();
+        if (this.virtualScrolling.enabled) {
+            // Scrolling can cause change detection on some cases, which slows down the table
+            // Since scrolling is
+            // * Only used in vscrolling mode
+            // * Doesn't change the template
+            // it's better to run scroll events outside zones
+            this.zone.runOutsideAngular(() => {
+                this.r2.listen(this.dataEl.nativeElement, 'scroll', () => this.handleScroll());
+            });
+        }
     }
 
     @HostListener('window:resize')

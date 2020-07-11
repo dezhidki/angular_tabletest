@@ -86,7 +86,7 @@ class GridAxis {
         startPosition = clamp(startPosition, 0, this.totalSize);
         viewStart = clamp(viewStart, 0, this.totalSize);
         size = Math.min(size, this.totalSize - startPosition);
-        viewSize = Math.min(viewSize, this.totalSize - startPosition);
+        viewSize = Math.min(viewSize, this.totalSize - viewStart);
         const startIndex = this.search(startPosition);
         const viewStartIndex = this.search(viewStart);
         const endIndex = this.search(startPosition + size);
@@ -108,7 +108,7 @@ class GridAxis {
             end = this.positionStart.length - 1;
         }
         if (start >= end) {
-            return start;
+            return end;
         }
         const mid = Math.floor((start + end) / 2);
         const posStart = this.positionStart[mid];
@@ -117,7 +117,7 @@ class GridAxis {
         } else if (position > posStart) {
             return this.search(position, mid + 1, end);
         }
-        return start;
+        return mid;
     }
 }
 
@@ -234,6 +234,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.scheduledUpdate = true;
         // Set viewport already here to account for subsequent handlers
         this.viewport = this.getViewport();
+        this.updateScroll();
         runMultiFrame(this.updateViewport());
     }
 
@@ -339,12 +340,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private* updateViewport(): Generator {
-        this.updateScroll();
         this.updateViewportSlots();
         const {vertical, horizontal} = this.viewport;
-        console.log(vertical);
         const render = (startRow: number, endRow: number) => {
-            console.log(`Render ${startRow} => ${endRow - 1}`);
             for (let rowNumber = startRow; rowNumber < endRow; rowNumber++) {
                 const tr = this.rowCache[rowNumber];
                 tr.hidden = false;
@@ -368,6 +366,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         yield;
         render(vertical.viewStartIndex + vertical.viewCount, vertical.count);
         yield;
+        this.tbody.style.visibility = 'visible';
         for (let r = 0; r < this.rowCache.length; r++) {
             const tr = this.rowCache[r];
             if (r > this.activeTableArea.vertical) {
@@ -381,7 +380,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         yield;
         // If we veered off the new safe view zone, we need to update it again!
         if (this.isOutsideSafeViewZone()) {
+            this.tbody.style.visibility = 'hidden';
             this.viewport = this.getViewport();
+            this.updateScroll();
             runMultiFrame(this.updateViewport());
         } else {
             this.scheduledUpdate = false;
@@ -416,7 +417,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         if (this.virtualScrolling.enabled) {
             const viewportWidth = data.clientWidth * (1 + 2 * this.virtualScrolling.viewOverflow.horizontal);
             const viewportHeight = data.clientHeight * (1 + 2 * this.virtualScrolling.viewOverflow.vertical);
-            console.log(data.scrollTop);
             return {
                 horizontal: this.colAxis.getVisibleItems(
                     data.scrollLeft - data.clientWidth * this.virtualScrolling.viewOverflow.horizontal,
@@ -533,7 +533,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             this.cellValueCache[rowIndex] = [];
         }
         // For virtual scrolling, we have to DOMPurify each cell separately, which can bring the performance down a bit
-        return this.cellValueCache[rowIndex][columnIndex] = this.modelProvider.getCellContents(rowIndex, columnIndex);
+        return this.cellValueCache[rowIndex][columnIndex] = DOMPurify.sanitize(this.modelProvider.getCellContents(rowIndex, columnIndex));
     }
 
     private updateScroll(): void {

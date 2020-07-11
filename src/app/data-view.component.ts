@@ -47,6 +47,8 @@ interface VisibleItems {
     startIndex: number;
     count: number;
     startPosition: number;
+    viewStartIndex: number;
+    viewCount: number;
 }
 
 interface Viewport {
@@ -80,15 +82,21 @@ class GridAxis {
         }
     }
 
-    getVisibleItems(startPosition: number, size: number): VisibleItems {
+    getVisibleItems(startPosition: number, size: number, viewStart: number, viewSize: number): VisibleItems {
         startPosition = clamp(startPosition, 0, this.totalSize);
+        viewStart = clamp(viewStart, 0, this.totalSize);
         size = Math.min(size, this.totalSize - startPosition);
+        viewSize = Math.min(viewSize, this.totalSize - startPosition);
         const startIndex = this.search(startPosition);
+        const viewStartIndex = this.search(viewStart);
         const endIndex = this.search(startPosition + size);
+        const viewEndIndex = this.search(viewStart + viewSize);
         return {
             startIndex: this.visibleItems[startIndex],
-            count: endIndex - startIndex,
-            startPosition: this.positionStart[startIndex]
+            count: Math.min(endIndex - startIndex + 1, this.visibleItems.length - startIndex),
+            startPosition: this.positionStart[startIndex],
+            viewStartIndex: viewStartIndex - startIndex,
+            viewCount: Math.min(viewEndIndex - viewStartIndex + 1, this.visibleItems.length - viewStartIndex),
         };
     }
 
@@ -166,7 +174,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     cellCache: HTMLTableDataCellElement[][] = [];
     rowCache: HTMLTableRowElement[] = [];
     activeTableArea: Position = {horizontal: 0, vertical: 0};
-    instantRefresh = false;
     scheduledUpdate = false;
     private viewport: Viewport;
     private rowAxis: GridAxis;
@@ -181,6 +188,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     private get tableContainerEl(): HTMLElement {
         return this.tableContainer.nativeElement as HTMLElement;
+    }
+
+    private get dataContainer(): HTMLElement {
+        return this.dataEl.nativeElement as HTMLElement;
     }
 
     ngOnInit(): void {
@@ -213,12 +224,51 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     handleScroll(): void {
+        this.syncHeaderScroll();
         if (this.scheduledUpdate) {
-            this.instantRefresh = true;
+            return;
+        }
+        if (!this.isOutsideSafeViewZone()) {
             return;
         }
         this.scheduledUpdate = true;
+        // Set viewport already here to account for subsequent handlers
+        this.viewport = this.getViewport();
         runMultiFrame(this.updateViewport());
+    }
+
+    buildTable(): void {
+        // this.updateHeaderWidths();
+        const tbody = this.tbody;
+
+        this.viewport = this.getViewport();
+        const {vertical, horizontal} = this.viewport;
+        this.prepareTable();
+        this.updateScroll();
+        const getItem = (axis: GridAxis, index: number) =>
+            this.virtualScrolling.enabled ? this.rowAxis.visibleItems[index] : this.rowAxis.itemOrder[index];
+
+        for (let rowNumber = 0; rowNumber < vertical.count; rowNumber++) {
+            const rowIndex = getItem(this.rowAxis, vertical.startIndex + rowNumber);
+            const tr = this.makeRow(rowIndex);
+            for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
+                const columnIndex = getItem(this.colAxis, horizontal.startIndex + columnNumber);
+                tr.appendChild(this.makeCell(rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex)));
+            }
+            tbody.appendChild(tr);
+        }
+        this.activeTableArea = {
+            vertical: vertical.count,
+            horizontal: horizontal.count
+        };
+        // Optimization: sanitize whole tbody in place
+        if (!this.virtualScrolling.enabled) {
+            DOMPurify.sanitize(tbody, {IN_PLACE: true});
+        }
+        if (this.idTable) {
+            this.buildIdTable(this.idTable.nativeElement);
+        }
+        this.updateHeaderIdsSizes();
     }
 
     private updateViewportSlots(): boolean {
@@ -279,36 +329,45 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         return rowDelta !== 0 && colDelta !== 0;
     }
 
-    private* updateViewport(): Generator {
-        this.syncHeaderScroll();
+    private isOutsideSafeViewZone(): boolean {
         const data = this.dataContainer;
         const h = data.clientHeight * this.virtualScrolling.viewOverflow.vertical;
         const w = data.clientWidth * this.virtualScrolling.viewOverflow.horizontal;
         const overVertical = Math.abs(this.viewport.vertical.startPosition - this.dataContainer.scrollTop + h) > h;
         const overHorizontal = Math.abs(this.viewport.horizontal.startPosition - this.dataContainer.scrollLeft + w) > w;
-        const shouldUpdate = overHorizontal || overVertical;
-        if (!shouldUpdate) {
-            this.scheduledUpdate = false;
-            return;
-        }
-        console.log(`start: ${this.viewport.vertical.startPosition}, top: ${this.dataContainer.scrollTop}, h: ${data.clientHeight}`);
-        console.log(`vert: ${overVertical}, hoz: ${overHorizontal}`);
-        this.viewport = this.getViewport();
+        return overHorizontal || overVertical;
+    }
+
+    private* updateViewport(): Generator {
         this.updateScroll();
         this.updateViewportSlots();
         const {vertical, horizontal} = this.viewport;
-        for (let rowNumber = 0; rowNumber < vertical.count; rowNumber++) {
-            const tr = this.rowCache[rowNumber];
-            tr.hidden = false;
-            const rowIndex = this.rowAxis.visibleItems[vertical.startIndex + rowNumber];
-            this.updateRow(tr, rowIndex);
-            for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
-                const td = this.cellCache[rowNumber][columnNumber];
-                td.hidden = false;
-                const columnIndex = horizontal.startIndex + columnNumber;
-                this.updateCell(td, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
+        console.log(vertical);
+        const render = (startRow: number, endRow: number) => {
+            console.log(`Render ${startRow} => ${endRow - 1}`);
+            for (let rowNumber = startRow; rowNumber < endRow; rowNumber++) {
+                const tr = this.rowCache[rowNumber];
+                tr.hidden = false;
+                const rowIndex = this.rowAxis.visibleItems[vertical.startIndex + rowNumber];
+                this.updateRow(tr, rowIndex);
+                for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
+                    const td = this.cellCache[rowNumber][columnNumber];
+                    td.hidden = false;
+                    const columnIndex = horizontal.startIndex + columnNumber;
+                    this.updateCell(td, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
+                }
             }
-        }
+        };
+        // Render in three parts:
+        // * The main visible area
+        // * The top part
+        // * The bottom part
+        render(vertical.viewStartIndex, vertical.viewStartIndex + vertical.viewCount);
+        yield;
+        render(0, vertical.viewStartIndex);
+        yield;
+        render(vertical.viewStartIndex + vertical.viewCount, vertical.count);
+        yield;
         for (let r = 0; r < this.rowCache.length; r++) {
             const tr = this.rowCache[r];
             if (r > this.activeTableArea.vertical) {
@@ -319,7 +378,14 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 row[c].hidden = true;
             }
         }
-        this.scheduledUpdate = false;
+        yield;
+        // If we veered off the new safe view zone, we need to update it again!
+        if (this.isOutsideSafeViewZone()) {
+            this.viewport = this.getViewport();
+            runMultiFrame(this.updateViewport());
+        } else {
+            this.scheduledUpdate = false;
+        }
     }
 
     private updateHeaderWidths(): void {
@@ -350,16 +416,23 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         if (this.virtualScrolling.enabled) {
             const viewportWidth = data.clientWidth * (1 + 2 * this.virtualScrolling.viewOverflow.horizontal);
             const viewportHeight = data.clientHeight * (1 + 2 * this.virtualScrolling.viewOverflow.vertical);
+            console.log(data.scrollTop);
             return {
                 horizontal: this.colAxis.getVisibleItems(
-                    data.scrollLeft - data.clientWidth * this.virtualScrolling.viewOverflow.horizontal, viewportWidth),
+                    data.scrollLeft - data.clientWidth * this.virtualScrolling.viewOverflow.horizontal,
+                    viewportWidth,
+                    data.scrollLeft,
+                    data.clientWidth),
                 vertical: this.rowAxis.getVisibleItems(
-                    data.scrollTop - data.clientHeight * this.virtualScrolling.viewOverflow.vertical, viewportHeight)
+                    data.scrollTop - data.clientHeight * this.virtualScrolling.viewOverflow.vertical,
+                    viewportHeight,
+                    data.scrollTop,
+                    data.clientHeight)
             };
         }
         return {
-            horizontal: {startPosition: 0, count: columns, startIndex: 0},
-            vertical: {startPosition: 0, count: rows, startIndex: 0},
+            horizontal: {startPosition: 0, count: columns, startIndex: 0, viewCount: 0, viewStartIndex: 0},
+            vertical: {startPosition: 0, count: rows, startIndex: 0, viewCount: 0, viewStartIndex: 0},
         };
     }
 
@@ -371,40 +444,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         table.style.height = `${this.rowAxis.totalSize}px`;
         table.style.width = `${this.colAxis.totalSize}px`;
         table.style.borderSpacing = `${this.virtualScrolling.borderSpacing}px`;
-    }
-
-    buildTable(): void {
-        // this.updateHeaderWidths();
-        const tbody = this.tbody;
-
-        this.viewport = this.getViewport();
-        const {vertical, horizontal} = this.viewport;
-        this.prepareTable();
-        this.updateScroll();
-        const getItem = (axis: GridAxis, index: number) =>
-            this.virtualScrolling.enabled ? this.rowAxis.visibleItems[index] : this.rowAxis.itemOrder[index];
-
-        for (let rowNumber = 0; rowNumber < vertical.count; rowNumber++) {
-            const rowIndex = getItem(this.rowAxis, vertical.startIndex + rowNumber);
-            const tr = this.makeRow(rowIndex);
-            for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
-                const columnIndex = getItem(this.colAxis, horizontal.startIndex + columnNumber);
-                tr.appendChild(this.makeCell(rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex)));
-            }
-            tbody.appendChild(tr);
-        }
-        this.activeTableArea = {
-            vertical: vertical.count,
-            horizontal: horizontal.count
-        };
-        // Optimization: sanitize whole tbody in place
-        if (!this.virtualScrolling.enabled) {
-            DOMPurify.sanitize(tbody, {IN_PLACE: true});
-        }
-        if (this.idTable) {
-            this.buildIdTable(this.idTable.nativeElement);
-        }
-        this.updateHeaderIdsSizes();
     }
 
     private updateHeaderIdsSizes(): void {
@@ -494,15 +533,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             this.cellValueCache[rowIndex] = [];
         }
         // For virtual scrolling, we have to DOMPurify each cell separately, which can bring the performance down a bit
-        return this.cellValueCache[rowIndex][columnIndex] = DOMPurify.sanitize(this.modelProvider.getCellContents(rowIndex, columnIndex));
+        return this.cellValueCache[rowIndex][columnIndex] = this.modelProvider.getCellContents(rowIndex, columnIndex);
     }
 
     private updateScroll(): void {
         this.tbody.style.transform = `translateX(${this.viewport.horizontal.startPosition}px) translateY(${this.viewport.vertical.startPosition}px)`;
-    }
-
-    private get dataContainer(): HTMLElement {
-        return this.dataEl.nativeElement as HTMLElement;
     }
 }
 

@@ -380,6 +380,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         yield;
         // If we veered off the new safe view zone, we need to update it again!
         if (this.isOutsideSafeViewZone()) {
+            // This could have been likely caused by fast scrolling, in which case hide the element to prevent
+            // flickering
             this.tbody.style.visibility = 'hidden';
             this.viewport = this.getViewport();
             this.updateScroll();

@@ -121,8 +121,90 @@ class GridAxis {
     }
 }
 
+interface RowStore {
+    row: HTMLTableRowElement;
+    cells: HTMLTableCellElement[];
+}
+
+class TableCache {
+    tbody: HTMLTableSectionElement;
+    rows: RowStore[];
+    activeArea: Position = {horizontal: 0, vertical: 0};
+
+    getRow(rowIndex: number): HTMLTableRowElement {
+        if (rowIndex > this.activeArea.vertical) {
+            return undefined;
+        } else {
+            return this.rows[rowIndex].row;
+        }
+    }
+
+    getCell(rowIndex: number, cellIndex: number): HTMLTableCellElement {
+        if (rowIndex > this.activeArea.vertical || cellIndex > this.activeArea.horizontal) {
+            return undefined;
+        }
+        return this.rows[rowIndex].cells[cellIndex];
+    }
+
+    resize(rows: number, columns: number): boolean {
+        const rowDelta = rows - this.activeArea.vertical;
+        const colDelta = columns - this.activeArea.horizontal;
+        if (rowDelta > 0) {
+            // Too few rows => grow
+            // Readd possible hidden rows
+            for (let rowNumber = 0; rowNumber < rows; rowNumber++) {
+                let row = this.rows[rowNumber];
+                if (row) {
+                    row.row.hidden = false;
+                    continue;
+                }
+                row = this.rows[rowNumber] = {
+                    row: el('tr'),
+                    cells: []
+                };
+                // Don't update col count to correct one yet, handle just rows first
+                for (const cell of row.cells) {
+                    cell.hidden = false;
+                }
+            }
+        } else if (rowDelta < 0) {
+            // Too many rows => hide unused ones
+            for (let rowNumber = rows; rowNumber < this.rows.length; rowNumber++) {
+                this.rows[rowNumber].row.hidden = true;
+            }
+        }
+
+        if (colDelta > 0) {
+            // Columns need to be added => make use of colcache here
+            for (let rowNumber = 0; rowNumber < rows; rowNumber++) {
+                const row = this.rows[rowNumber];
+                for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
+                    const cell = row.cells[columnIndex];
+                    if (cell) {
+                        cell.hidden = false;
+                    } else {
+                        row.cells[columnIndex] = el('td');
+                    }
+                }
+            }
+        } else if (colDelta < 0) {
+            // Need to hide columns
+            for (let rowNumber = 0; rowNumber < rows; rowNumber++) {
+                const row = this.rows[rowNumber];
+                for (let colNumber = this.activeArea.horizontal; colNumber < row.cells.length; colNumber++) {
+                    row.cells[colNumber].hidden = true;
+                }
+            }
+        }
+        this.activeArea = {
+            horizontal: columns,
+            vertical: rows
+        };
+        return rowDelta !== 0 && colDelta !== 0;
+    }
+}
+
 // TODO: Make all headers virtual and part of the datagrid
-// TODO: Don't draw when fast scrolling?
 // TODO: Add ID + checkbox cols
 // TODO: Support for hiding rows
 // TODO: Support for row/column span
@@ -132,9 +214,7 @@ class GridAxis {
     template: `
         <ng-container *ngIf="virtualScrolling.enabled">
             <div class="header" #headerContainer>
-                <table>
-                    <ng-content *ngTemplateOutlet="headerContent"></ng-content>
-                </table>
+                <table #headerTable></table>
             </div>
             <div class="ids" #idsContainer>
                 <table #idTable></table>
@@ -162,6 +242,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @ViewChild('headerContainer') headerEl?: ElementRef;
     @ViewChild('dataContainer') dataEl?: ElementRef;
     @ViewChild('idTable') idTable?: ElementRef;
+    @ViewChild('headerTable') headerTable?: ElementRef;
     @ViewChild('idsContainer') idsContainer?: ElementRef;
     @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
     @Input() virtualScrolling: VirtualScrollingOptions = {
@@ -170,9 +251,17 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         borderSpacing: 2
     };
     @HostBinding('class.virtual') virtual = false;
+    // Main data cache
     cellValueCache: Record<number, string[]> = {};
     cellCache: HTMLTableDataCellElement[][] = [];
     rowCache: HTMLTableRowElement[] = [];
+    // ID table cache
+    idRowCache: HTMLTableRowElement[] = [];
+    idCellCache: HTMLTableDataCellElement[] = [];
+    itemSelectCache: HTMLInputElement[] = [];
+    // Header cache
+    columnIdCellCache: HTMLTableDataCellElement[] = [];
+    filterInputCache: HTMLInputElement[] = [];
     activeTableArea: Position = {horizontal: 0, vertical: 0};
     scheduledUpdate = false;
     private viewport: Viewport;
@@ -266,9 +355,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         if (!this.virtualScrolling.enabled) {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
         }
-        if (this.idTable) {
-            this.buildIdTable(this.idTable.nativeElement);
-        }
+        this.buildIdTable();
         this.updateHeaderIdsSizes();
     }
 
@@ -456,22 +543,32 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         ids.style.height = `${data.clientHeight}px`;
     }
 
-    private buildIdTable(table: HTMLTableElement): void {
-        // const {rows} = this.modelProvider.getDimension();
-        // const tbody = el('tbody');
-        // const rowHeight = this.modelProvider.getRowHeight();
-        //
-        // for (let row = 0; row < rows; row++) {
-        //     const tr = tbody.appendChild(el('tr'));
-        //     tr.style.height = `${rowHeight}px`;
-        //     tr.appendChild(el('td', {
-        //         textContent: `${row}`
-        //     }));
-        //     tr.appendChild(el('td')).appendChild(el('input', {
-        //         type: 'checkbox'
-        //     }));
-        // }
-        // table.appendChild(tbody);
+    private buildHeaderTable(): void {
+
+    }
+
+    private buildIdTable(): void {
+        if (!this.idTable) {
+            return;
+        }
+        const table = this.idTable.nativeElement as HTMLTableElement;
+        const {vertical} = this.viewport;
+        const tbody = el('tbody');
+        for (let row = 0; row < vertical.viewCount; row++) {
+            const rowIndex = row + vertical.startIndex;
+            const tr = tbody.appendChild(el('tr'));
+            this.idRowCache.push(tr);
+            tr.style.height = `${this.modelProvider.getRowHeight(rowIndex)}px`;
+            const idCell = tr.appendChild(el('td', {
+                textContent: `${rowIndex}`
+            }));
+            this.idCellCache.push(idCell);
+            const selectCell = tr.appendChild(el('td')).appendChild(el('input', {
+                type: 'checkbox'
+            }));
+            this.itemSelectCache.push(selectCell);
+        }
+        table.appendChild(tbody);
     }
 
     private makeRow(row: number): HTMLTableRowElement {

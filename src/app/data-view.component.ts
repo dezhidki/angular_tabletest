@@ -127,9 +127,11 @@ interface RowStore {
 }
 
 class TableCache {
-    tbody: HTMLTableSectionElement;
-    rows: RowStore[];
+    rows: RowStore[] = [];
     activeArea: Position = {horizontal: 0, vertical: 0};
+
+    constructor(private tbody: HTMLTableSectionElement) {
+    }
 
     getRow(rowIndex: number): HTMLTableRowElement {
         if (rowIndex > this.activeArea.vertical) {
@@ -163,9 +165,11 @@ class TableCache {
                     cells: []
                 };
                 // Don't update col count to correct one yet, handle just rows first
-                for (const cell of row.cells) {
-                    cell.hidden = false;
+                for (let columnNumber = 0; columnNumber < columns; columnNumber++) {
+                    const cell = row.cells[columnNumber] = el('td');
+                    row.row.appendChild(cell);
                 }
+                this.tbody.appendChild(row.row);
             }
         } else if (rowDelta < 0) {
             // Too many rows => hide unused ones
@@ -179,11 +183,12 @@ class TableCache {
             for (let rowNumber = 0; rowNumber < rows; rowNumber++) {
                 const row = this.rows[rowNumber];
                 for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
-                    const cell = row.cells[columnIndex];
+                    let cell = row.cells[columnIndex];
                     if (cell) {
                         cell.hidden = false;
                     } else {
-                        row.cells[columnIndex] = el('td');
+                        cell = row.cells[columnIndex] = el('td');
+                        row.row.appendChild(cell);
                     }
                 }
             }
@@ -253,8 +258,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @HostBinding('class.virtual') virtual = false;
     // Main data cache
     cellValueCache: Record<number, string[]> = {};
-    cellCache: HTMLTableDataCellElement[][] = [];
-    rowCache: HTMLTableRowElement[] = [];
+    dataTableCache: TableCache;
     // ID table cache
     idRowCache: HTMLTableRowElement[] = [];
     idCellCache: HTMLTableDataCellElement[] = [];
@@ -291,6 +295,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     ngAfterViewInit(): void {
+        this.dataTableCache = new TableCache(this.tbody);
         this.buildTable();
         if (this.virtualScrolling.enabled) {
             // Scrolling can cause change detection on some cases, which slows down the table
@@ -330,91 +335,29 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     buildTable(): void {
         // this.updateHeaderWidths();
         const tbody = this.tbody;
-
         this.viewport = this.getViewport();
         const {vertical, horizontal} = this.viewport;
         this.prepareTable();
         this.updateScroll();
+        this.dataTableCache.resize(vertical.count, horizontal.count);
         const getItem = (axis: GridAxis, index: number) =>
             this.virtualScrolling.enabled ? this.rowAxis.visibleItems[index] : this.rowAxis.itemOrder[index];
 
         for (let rowNumber = 0; rowNumber < vertical.count; rowNumber++) {
             const rowIndex = getItem(this.rowAxis, vertical.startIndex + rowNumber);
-            const tr = this.makeRow(rowIndex);
+            this.updateRow(this.dataTableCache.getRow(rowNumber), rowIndex);
             for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
                 const columnIndex = getItem(this.colAxis, horizontal.startIndex + columnNumber);
-                tr.appendChild(this.makeCell(rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex)));
+                const cell = this.dataTableCache.getCell(rowNumber, columnNumber);
+                this.updateCell(cell, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
             }
-            tbody.appendChild(tr);
         }
-        this.activeTableArea = {
-            vertical: vertical.count,
-            horizontal: horizontal.count
-        };
         // Optimization: sanitize whole tbody in place
         if (!this.virtualScrolling.enabled) {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
         }
         this.buildIdTable();
         this.updateHeaderIdsSizes();
-    }
-
-    private updateViewportSlots(): boolean {
-        const rowDelta = this.viewport.vertical.count - this.activeTableArea.vertical;
-        const colDelta = this.viewport.horizontal.count - this.activeTableArea.horizontal;
-        if (rowDelta > 0) {
-            // Too few rows => grow
-            // Readd possible hidden rows
-            const tbody = this.tbody;
-            for (let rowNumber = 0; rowNumber < this.viewport.vertical.count; rowNumber++) {
-                let tr = this.rowCache[rowNumber];
-                if (tr) {
-                    tr.hidden = false;
-                    continue;
-                }
-                tr = this.rowCache[rowNumber] = el('tr');
-                const cache = [];
-                this.cellCache.push(cache);
-                // Don't update col count to correct one yet, handle just rows first
-                for (let columnIndex = 0; columnIndex < this.activeTableArea.horizontal; columnIndex++) {
-                    cache[columnIndex] = tr.appendChild(el('td'));
-                }
-                tbody.appendChild(tr);
-            }
-        } else if (rowDelta < 0) {
-            // Too many rows => hide unused ones
-            for (let rowNumber = this.viewport.vertical.count; rowNumber < this.rowCache.length; rowNumber++) {
-                this.rowCache[rowNumber].hidden = true;
-            }
-        }
-
-        if (colDelta > 0) {
-            // Columns need to be added => make use of colcache here
-            for (let rowNumber = 0; rowNumber < this.viewport.vertical.count; rowNumber++) {
-                const tr = this.rowCache[rowNumber];
-                for (let colNumber = 0; colNumber < this.viewport.horizontal.count; colNumber++) {
-                    let td = this.cellCache[rowNumber][colNumber];
-                    if (td) {
-                        td.hidden = false;
-                        continue;
-                    }
-                    td = this.cellCache[rowNumber][colNumber] = tr.appendChild(el('td'));
-                }
-            }
-        } else if (colDelta < 0) {
-            // Need to hide columns
-            for (let rowNumber = 0; rowNumber < this.viewport.vertical.count; rowNumber++) {
-                const row = this.cellCache[rowNumber];
-                for (let colNumber = this.activeTableArea.horizontal; colNumber < row.length; colNumber++) {
-                    row[colNumber].hidden = true;
-                }
-            }
-        }
-        this.activeTableArea = {
-            horizontal: this.viewport.horizontal.count,
-            vertical: this.viewport.vertical.count
-        };
-        return rowDelta !== 0 && colDelta !== 0;
     }
 
     private isOutsideSafeViewZone(): boolean {
@@ -427,16 +370,16 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private* updateViewport(): Generator {
-        this.updateViewportSlots();
+        this.dataTableCache.resize(this.viewport.vertical.count, this.viewport.horizontal.count);
         const {vertical, horizontal} = this.viewport;
         const render = (startRow: number, endRow: number) => {
             for (let rowNumber = startRow; rowNumber < endRow; rowNumber++) {
-                const tr = this.rowCache[rowNumber];
+                const tr = this.dataTableCache.getRow(rowNumber);
                 tr.hidden = false;
                 const rowIndex = this.rowAxis.visibleItems[vertical.startIndex + rowNumber];
                 this.updateRow(tr, rowIndex);
                 for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
-                    const td = this.cellCache[rowNumber][columnNumber];
+                    const td = this.dataTableCache.getCell(rowNumber, columnNumber);
                     td.hidden = false;
                     const columnIndex = horizontal.startIndex + columnNumber;
                     this.updateCell(td, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
@@ -454,17 +397,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         render(vertical.viewStartIndex + vertical.viewCount, vertical.count);
         yield;
         this.tbody.style.visibility = 'visible';
-        for (let r = 0; r < this.rowCache.length; r++) {
-            const tr = this.rowCache[r];
-            if (r > this.activeTableArea.vertical) {
-                tr.hidden = true;
-            }
-            const row = this.cellCache[r];
-            for (let c = this.activeTableArea.horizontal; c < row.length; c++) {
-                row[c].hidden = true;
-            }
-        }
-        yield;
         // If we veered off the new safe view zone, we need to update it again!
         if (this.isOutsideSafeViewZone()) {
             // This could have been likely caused by fast scrolling, in which case hide the element to prevent
@@ -543,10 +475,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         ids.style.height = `${data.clientHeight}px`;
     }
 
-    private buildHeaderTable(): void {
-
-    }
-
     private buildIdTable(): void {
         if (!this.idTable) {
             return;
@@ -571,15 +499,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         table.appendChild(tbody);
     }
 
-    private makeRow(row: number): HTMLTableRowElement {
-        const rowEl = this.updateRow(el('tr'), row);
-        if (this.virtualScrolling.enabled) {
-            this.cellCache.push([]);
-            this.rowCache.push(rowEl);
-        }
-        return rowEl;
-    }
-
     private updateRow(row: HTMLTableRowElement, rowIndex: number): HTMLTableRowElement {
         Object.assign(row, {
             style: this.modelProvider.stylingForRow(rowIndex),
@@ -591,15 +510,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             row.style.overflow = 'hidden';
         }
         return row;
-    }
-
-    private makeCell(row: number, column: number, contents?: string): HTMLTableDataCellElement {
-        const cell = this.updateCell(el('td'), row, column, contents);
-        if (this.virtualScrolling.enabled) {
-            const cur = this.cellCache[this.cellCache.length - 1];
-            cur.push(cell);
-        }
-        return cell;
     }
 
     private updateCell(cell: HTMLTableCellElement, rowIndex: number, columnIndex: number, contents?: string): HTMLTableCellElement {

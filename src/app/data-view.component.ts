@@ -219,10 +219,14 @@ class TableCache {
     template: `
         <ng-container *ngIf="virtualScrolling.enabled">
             <div class="header" #headerContainer>
-                <table #headerTable></table>
+                <table>
+                    <tbody #headerTable></tbody>
+                </table>
             </div>
             <div class="ids" #idsContainer>
-                <table #idTable></table>
+                <table>
+                    <tbody #idTable></tbody>
+                </table>
             </div>
         </ng-container>
         <div class="data" style="height: 50vh; overflow: scroll;" #dataContainer>
@@ -256,18 +260,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         borderSpacing: 2
     };
     @HostBinding('class.virtual') virtual = false;
-    // Main data cache
-    cellValueCache: Record<number, string[]> = {};
-    dataTableCache: TableCache;
-    // ID table cache
-    idRowCache: HTMLTableRowElement[] = [];
-    idCellCache: HTMLTableDataCellElement[] = [];
-    itemSelectCache: HTMLInputElement[] = [];
-    // Header cache
-    columnIdCellCache: HTMLTableDataCellElement[] = [];
-    filterInputCache: HTMLInputElement[] = [];
-    activeTableArea: Position = {horizontal: 0, vertical: 0};
-    scheduledUpdate = false;
+    private cellValueCache: Record<number, string[]> = {};
+    private dataTableCache: TableCache;
+    private idTableCache: TableCache;
+    private headerTableCache: TableCache;
+    private scheduledUpdate = false;
     private viewport: Viewport;
     private rowAxis: GridAxis;
     private colAxis: GridAxis;
@@ -296,6 +293,12 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     ngAfterViewInit(): void {
         this.dataTableCache = new TableCache(this.tbody);
+        if (this.idTable) {
+            this.idTableCache = new TableCache(this.idTable.nativeElement as HTMLTableSectionElement);
+        }
+        if (this.headerTable) {
+            this.headerTableCache = new TableCache(this.headerTable.nativeElement as HTMLTableSectionElement);
+        }
         this.buildTable();
         if (this.virtualScrolling.enabled) {
             // Scrolling can cause change detection on some cases, which slows down the table
@@ -333,7 +336,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     buildTable(): void {
-        // this.updateHeaderWidths();
         const tbody = this.tbody;
         this.viewport = this.getViewport();
         const {vertical, horizontal} = this.viewport;
@@ -357,6 +359,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
         }
         this.buildIdTable();
+        this.buildHeaderTable();
         this.updateHeaderIdsSizes();
     }
 
@@ -475,28 +478,34 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         ids.style.height = `${data.clientHeight}px`;
     }
 
-    private buildIdTable(): void {
-        if (!this.idTable) {
+    private buildHeaderTable(): void {
+        if (!this.headerTableCache) {
             return;
         }
-        const table = this.idTable.nativeElement as HTMLTableElement;
+        this.headerTableCache.resize(2, this.viewport.horizontal.count);
+        // TODO: Header
+    }
+
+    private buildIdTable(): void {
+        if (!this.idTableCache) {
+            return;
+        }
+        this.idTableCache.resize(this.viewport.vertical.count, 2);
         const {vertical} = this.viewport;
-        const tbody = el('tbody');
         for (let row = 0; row < vertical.viewCount; row++) {
             const rowIndex = row + vertical.startIndex;
-            const tr = tbody.appendChild(el('tr'));
-            this.idRowCache.push(tr);
+
+            const tr = this.idTableCache.getRow(row);
             tr.style.height = `${this.modelProvider.getRowHeight(rowIndex)}px`;
-            const idCell = tr.appendChild(el('td', {
-                textContent: `${rowIndex}`
-            }));
-            this.idCellCache.push(idCell);
-            const selectCell = tr.appendChild(el('td')).appendChild(el('input', {
+
+            const idCell = this.idTableCache.getCell(row, 0);
+            idCell.textContent = `${rowIndex}`;
+
+            const selectCell = this.idTableCache.getCell(row, 1);
+            selectCell.appendChild(el('input', {
                 type: 'checkbox'
             }));
-            this.itemSelectCache.push(selectCell);
         }
-        table.appendChild(tbody);
     }
 
     private updateRow(row: HTMLTableRowElement, rowIndex: number): HTMLTableRowElement {

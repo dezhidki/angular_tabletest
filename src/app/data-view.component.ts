@@ -373,7 +373,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private* updateViewport(): Generator {
-        this.dataTableCache.resize(this.viewport.vertical.count, this.viewport.horizontal.count);
         const {vertical, horizontal} = this.viewport;
         const render = (startRow: number, endRow: number) => {
             for (let rowNumber = startRow; rowNumber < endRow; rowNumber++) {
@@ -389,6 +388,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 }
             }
         };
+        this.dataTableCache.resize(this.viewport.vertical.count, this.viewport.horizontal.count);
         // Render in three parts:
         // * The main visible area
         // * The top part
@@ -502,17 +502,15 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             idCell.textContent = `${rowIndex}`;
 
             const selectCell = this.idTableCache.getCell(row, 1);
-            selectCell.appendChild(el('input', {
-                type: 'checkbox'
-            }));
+            const input = el('input');
+            input.type = 'checkbox';
+            selectCell.appendChild(input);
         }
     }
 
     private updateRow(row: HTMLTableRowElement, rowIndex: number): HTMLTableRowElement {
-        Object.assign(row, {
-            style: this.modelProvider.stylingForRow(rowIndex),
-            hidden: !this.virtualScrolling.enabled && this.rowAxis.hiddenItems.has(rowIndex)
-        });
+        row.style.cssText = this.modelProvider.stylingForRow(rowIndex);
+        row.hidden = !this.virtualScrolling.enabled && this.rowAxis.hiddenItems.has(rowIndex);
         const rowHeight = this.modelProvider.getRowHeight(rowIndex);
         if (rowHeight) {
             row.style.height = `${rowHeight}px`;
@@ -522,12 +520,10 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private updateCell(cell: HTMLTableCellElement, rowIndex: number, columnIndex: number, contents?: string): HTMLTableCellElement {
-        Object.assign(cell, {
-            hidden: !this.virtualScrolling.enabled && this.colAxis.hiddenItems.has(columnIndex),
-            className: this.modelProvider.classForCell(rowIndex, columnIndex),
-            style: this.modelProvider.stylingForCell(rowIndex, columnIndex),
-            onclick: () => this.modelProvider.handleClickCell(rowIndex, columnIndex)
-        });
+        cell.hidden = !this.virtualScrolling.enabled && this.colAxis.hiddenItems.has(columnIndex);
+        cell.className = this.modelProvider.classForCell(rowIndex, columnIndex);
+        cell.style.cssText = this.modelProvider.stylingForCell(rowIndex, columnIndex);
+        cell.onclick = () => this.modelProvider.handleClickCell(rowIndex, columnIndex);
         const colWidth = this.modelProvider.getColumnWidth(columnIndex);
         if (colWidth) {
             cell.style.width = `${colWidth}px`;
@@ -561,8 +557,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
 type HTMLKeys<K extends keyof HTMLElementTagNameMap> = Partial<{ [k in keyof HTMLElementTagNameMap[K]]: unknown }>;
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, opts?: HTMLKeys<K>): HTMLElementTagNameMap[K] {
-    return Object.assign(document.createElement(tag), opts);
+function el<K extends keyof HTMLElementTagNameMap>(tag: K): HTMLElementTagNameMap[K] {
+    return document.createElement(tag);
 }
 
 function clamp(val: number, min: number, max: number): number {

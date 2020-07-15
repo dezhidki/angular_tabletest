@@ -483,7 +483,19 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             return;
         }
         this.headerTableCache.resize(2, this.viewport.horizontal.count);
-        // TODO: Header
+        const {horizontal} = this.viewport;
+        for (let column = 0; column < horizontal.count; column++) {
+            const columnIndex = this.colAxis.visibleItems[column + horizontal.startIndex];
+            const headerCell = this.headerTableCache.getCell(0, column);
+            headerCell.textContent = `${columnIndex}`;
+            headerCell.style.width = `${this.modelProvider.getColumnWidth(columnIndex)}px`;
+
+            const filterCell = this.headerTableCache.getCell(1, column);
+            const filterInput = el('input');
+            filterInput.type = 'text';
+            filterCell.style.width = `${this.modelProvider.getColumnWidth(columnIndex)}px`;
+            filterCell.appendChild(filterInput);
+        }
     }
 
     private buildIdTable(): void {
@@ -492,7 +504,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         }
         this.idTableCache.resize(this.viewport.vertical.count, 2);
         const {vertical} = this.viewport;
-        for (let row = 0; row < vertical.viewCount; row++) {
+        for (let row = 0; row < vertical.count; row++) {
             const rowIndex = this.rowAxis.visibleItems[row + vertical.startIndex];
 
             const tr = this.idTableCache.getRow(row);

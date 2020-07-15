@@ -219,18 +219,16 @@ class TableCache {
 @Component({
     selector: 'app-data-view',
     template: `
-        <ng-container *ngIf="virtualScrolling.enabled">
-            <div class="header" #headerContainer>
-                <table>
-                    <tbody #headerTable></tbody>
-                </table>
-            </div>
-            <div class="ids" #idsContainer>
-                <table>
-                    <tbody #idTable></tbody>
-                </table>
-            </div>
-        </ng-container>
+        <div class="header" #headerContainer>
+            <table>
+                <tbody #headerTable></tbody>
+            </table>
+        </div>
+        <div class="ids" #idsContainer>
+            <table>
+                <tbody #idTable></tbody>
+            </table>
+        </div>
         <div class="data" style="height: 50vh; overflow: scroll;" #dataContainer>
             <table [class.virtual]="virtualScrolling.enabled" #tableContainer>
                 <ng-container *ngIf="!virtualScrolling.enabled">
@@ -261,7 +259,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         viewOverflow: {horizontal: 1, vertical: 1},
         borderSpacing: 2
     };
-    @HostBinding('class.virtual') virtual = false;
     private cellValueCache: Record<number, string[]> = {};
     private dataTableCache: TableCache;
     private idTableCache: TableCache;
@@ -287,7 +284,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     ngOnInit(): void {
-        this.virtual = this.virtualScrolling.enabled;
         if (this.virtualScrolling.enabled) {
             this.startCellPurifying();
         }
@@ -298,12 +294,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     ngAfterViewInit(): void {
         this.dataTableCache = new TableCache(this.tbody);
-        if (this.idTable) {
-            this.idTableCache = new TableCache(this.idTable.nativeElement as HTMLTableSectionElement);
-        }
-        if (this.headerTable) {
-            this.headerTableCache = new TableCache(this.headerTable.nativeElement as HTMLTableSectionElement);
-        }
+        this.idTableCache = new TableCache(this.idTable.nativeElement as HTMLTableSectionElement);
+        this.headerTableCache = new TableCache(this.headerTable.nativeElement as HTMLTableSectionElement);
         this.buildTable();
         if (this.virtualScrolling.enabled) {
             // Scrolling can cause change detection on some cases, which slows down the table
@@ -415,17 +407,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             runMultiFrame(this.updateViewport());
         } else {
             this.scheduledUpdate = false;
-        }
-    }
-
-    private updateHeaderWidths(): void {
-        if (this.fixedElements.length === 0 || !this.virtualScrolling.enabled) {
-            return;
-        }
-        const {columns} = this.modelProvider.getDimension();
-        const widths = Array.from(new Array(columns)).map((e, i) => this.modelProvider.getColumnWidth(i));
-        for (const item of this.fixedElements) {
-            item.setWidth(widths);
         }
     }
 
@@ -563,8 +544,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         if (!row) {
             this.cellValueCache[rowIndex] = [];
         }
-        // For virtual scrolling, we have to DOMPurify each cell separately, which can bring the performance down a bit
-        return this.cellValueCache[rowIndex][columnIndex] = this.modelProvider.getCellContents(rowIndex, columnIndex); // DOMPurify.sanitize();
+        // If the web worker hasn't sanitized the contents yet, do it ourselves
+        return this.cellValueCache[rowIndex][columnIndex] = DOMPurify.sanitize(this.modelProvider.getCellContents(rowIndex, columnIndex));
     }
 
     private updateScroll(): void {
@@ -575,7 +556,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         if (typeof Worker !== 'undefined') {
             const worker = new Worker('./table-purify.worker', {type: 'module'});
             worker.onmessage = ({data}: { data: PurifyData }) => {
-                console.log(data);
                 this.cellValueCache[data.row] = data.data;
             };
             const {rows} = this.modelProvider.getDimension();

@@ -1,13 +1,9 @@
 :host {
-    display: block;
-
-    &.virtual {
-        display: grid;
-        grid-template:
-            ". header" auto
-            "ids content" auto
-            / max-content auto;
-    }
+    display: grid;
+    grid-template:
+        ". header" auto
+        "ids content" auto
+        / max-content auto;
 }
 
 ::ng-deep .header {

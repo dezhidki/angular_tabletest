@@ -383,7 +383,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
                     const td = this.dataTableCache.getCell(rowNumber, columnNumber);
                     td.hidden = false;
-                    const columnIndex = horizontal.startIndex + columnNumber;
+                    const columnIndex = this.colAxis.visibleItems[horizontal.startIndex + columnNumber];
                     this.updateCell(td, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
                 }
             }
@@ -493,7 +493,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         this.idTableCache.resize(this.viewport.vertical.count, 2);
         const {vertical} = this.viewport;
         for (let row = 0; row < vertical.viewCount; row++) {
-            const rowIndex = row + vertical.startIndex;
+            const rowIndex = this.rowAxis.visibleItems[row + vertical.startIndex];
 
             const tr = this.idTableCache.getRow(row);
             tr.style.height = `${this.modelProvider.getRowHeight(rowIndex)}px`;

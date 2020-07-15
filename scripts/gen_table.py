@@ -4,7 +4,7 @@ import random
 import requests
 
 ROWS = 3000
-COLS = 10
+COLS = 100
 resp = requests.get("http://svnweb.freebsd.org/csrg/share/dict/words?view=co&content-type=text/plain")
 WORDS = resp.text.splitlines()
 

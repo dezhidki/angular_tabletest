@@ -20,8 +20,10 @@
     "@angular/platform-browser-dynamic": "~10.0.0",
     "@angular/router": "~10.0.0",
     "@types/dompurify": "^2.0.2",
+    "@types/sanitize-html": "^1.23.3",
     "dompurify": "^2.0.12",
     "rxjs": "~6.5.5",
+    "sanitize-html": "^1.27.0",
     "tslib": "^2.0.0",
     "zone.js": "~0.10.3"
   },

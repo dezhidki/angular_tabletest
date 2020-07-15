@@ -66,6 +66,10 @@ export class TestTableProvider implements TableModelProvider {
         return DATA[rowIndex][columnIndex];
     }
 
+    getRowContents(rowIndex: number): string[] {
+        return DATA[rowIndex];
+    }
+
     getRowHeight(rowIndex: number): number | undefined {
         return 50;
     }

@@ -17,16 +17,7 @@ import {TableModelProvider, VirtualScrollingOptions} from './data-view.component
         </ul>
         <button (click)="show = true">Show</button>
         <div style="margin: auto">
-            <app-data-view *ngIf="show" [modelProvider]="dataProvider" [virtualScrolling]="opts">
-                <thead appFixedData>
-                <th *ngFor="let header of dataCols">{{header}}</th>
-                </thead>
-                <tbody appFixedData>
-                <td *ngFor="let header of dataCols">
-                    <input style="width: 90%; margin: auto; display: block;" type="text" value="Input {{header}}"/>
-                </td>
-                </tbody>
-            </app-data-view>
+            <app-data-view *ngIf="show" [modelProvider]="dataProvider" [virtualScrolling]="opts"></app-data-view>
         </div>
 
         <h1>Original tests</h1>
@@ -172,7 +163,7 @@ export class AppComponent {
         enabled: true,
         borderSpacing: 2,
         viewOverflow: {
-            vertical: 1,
+            vertical: 2,
             horizontal: 1
         }
     };

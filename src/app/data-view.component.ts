@@ -30,6 +30,8 @@ export interface TableModelProvider {
     handleClickCell(rowIndex: number, columnIndex: number): void;
 
     getCellContents(rowIndex: number, columnIndex: number): string;
+
+    getRowContents(rowIndex: number): string[];
 }
 
 export interface VirtualScrollingOptions {
@@ -286,6 +288,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     ngOnInit(): void {
         this.virtual = this.virtualScrolling.enabled;
+        if (this.virtualScrolling.enabled) {
+            this.startCellPurifying();
+        }
         const {rows, columns} = this.modelProvider.getDimension();
         this.rowAxis = new GridAxis(rows, this.virtualScrolling.borderSpacing, i => this.modelProvider.getRowHeight(i));
         this.colAxis = new GridAxis(columns, this.virtualScrolling.borderSpacing, i => this.modelProvider.getColumnWidth(i));
@@ -559,11 +564,28 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             this.cellValueCache[rowIndex] = [];
         }
         // For virtual scrolling, we have to DOMPurify each cell separately, which can bring the performance down a bit
-        return this.cellValueCache[rowIndex][columnIndex] = DOMPurify.sanitize(this.modelProvider.getCellContents(rowIndex, columnIndex));
+        return this.cellValueCache[rowIndex][columnIndex] = this.modelProvider.getCellContents(rowIndex, columnIndex); // DOMPurify.sanitize();
     }
 
     private updateScroll(): void {
         this.tbody.style.transform = `translateX(${this.viewport.horizontal.startPosition}px) translateY(${this.viewport.vertical.startPosition}px)`;
+    }
+
+    private startCellPurifying(): void {
+        if (typeof Worker !== 'undefined') {
+            const worker = new Worker('./table-purify.worker', {type: 'module'});
+            worker.onmessage = ({data}: { data: PurifyData }) => {
+                console.log(data);
+                this.cellValueCache[data.row] = data.data;
+            };
+            const {rows} = this.modelProvider.getDimension();
+            for (let row = 0; row < rows; row++) {
+                worker.postMessage({
+                    row,
+                    data: this.modelProvider.getRowContents(row)
+                } as PurifyData);
+            }
+        }
     }
 }
 
@@ -591,4 +613,9 @@ function waitForFrame(): Promise<void> {
     return new Promise<void>(r => requestAnimationFrame(() => {
         r();
     }));
+}
+
+interface PurifyData {
+    row: number;
+    data: string[];
 }

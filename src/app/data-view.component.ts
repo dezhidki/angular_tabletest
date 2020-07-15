@@ -198,7 +198,7 @@ class TableCache {
             // Need to hide columns
             for (let rowNumber = 0; rowNumber < rows; rowNumber++) {
                 const row = this.rows[rowNumber];
-                for (let colNumber = this.activeArea.horizontal; colNumber < row.cells.length; colNumber++) {
+                for (let colNumber = columns; colNumber < row.cells.length; colNumber++) {
                     row.cells[colNumber].hidden = true;
                 }
             }

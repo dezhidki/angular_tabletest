@@ -371,6 +371,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     private* updateViewport(): Generator {
         const {vertical, horizontal} = this.viewport;
+        this.dataTableCache.resize(this.viewport.vertical.count, this.viewport.horizontal.count);
         const render = (startRow: number, endRow: number) => {
             for (let rowNumber = startRow; rowNumber < endRow; rowNumber++) {
                 const tr = this.dataTableCache.getRow(rowNumber);
@@ -385,17 +386,16 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 }
             }
         };
-        this.dataTableCache.resize(this.viewport.vertical.count, this.viewport.horizontal.count);
         // Render in three parts:
         // * The main visible area
         // * The top part
         // * The bottom part
-        render(vertical.viewStartIndex, vertical.viewStartIndex + vertical.viewCount);
+        render(0, vertical.count);
         yield;
-        render(0, vertical.viewStartIndex);
-        yield;
-        render(vertical.viewStartIndex + vertical.viewCount, vertical.count);
-        yield;
+        // render(0, vertical.viewStartIndex);
+        // yield;
+        // render(vertical.viewStartIndex + vertical.viewCount, vertical.count);
+        // yield;
         this.tbody.style.visibility = 'visible';
         // If we veered off the new safe view zone, we need to update it again!
         if (this.isOutsideSafeViewZone()) {

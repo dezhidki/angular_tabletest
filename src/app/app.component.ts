@@ -163,7 +163,7 @@ export class AppComponent {
         enabled: true,
         borderSpacing: 2,
         viewOverflow: {
-            vertical: 2,
+            vertical: 1,
             horizontal: 1
         }
     };

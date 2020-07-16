@@ -1,5 +1,6 @@
 :host {
     display: grid;
+    width: 50vw;
     grid-template:
         ". header" auto
         "ids content" auto

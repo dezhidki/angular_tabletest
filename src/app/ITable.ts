@@ -55,7 +55,7 @@ export class TestTableProvider implements TableModelProvider {
     }
 
     getColumnWidth(columnIndex: number): number | undefined {
-        return 300;
+        return 350;
     }
 
     getDimension(): { rows: number; columns: number } {

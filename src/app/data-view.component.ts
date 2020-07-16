@@ -230,16 +230,9 @@ class TableCache {
         </div>
         <div class="data" style="height: 50vh; overflow: scroll;" #dataContainer>
             <table [class.virtual]="virtualScrolling.enabled" #tableContainer>
-                <ng-container *ngIf="!virtualScrolling.enabled">
-                    <ng-content *ngTemplateOutlet="headerContent"></ng-content>
-                </ng-container>
-                <tbody class="content" #container>
-                </tbody>
+                <tbody class="content" #container></tbody>
             </table>
         </div>
-        <ng-template #headerContent>
-            <ng-content></ng-content>
-        </ng-template>
     `,
     styleUrls: ['./data-view.component.scss']
 })
@@ -375,6 +368,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     private* updateViewport(): Generator {
         const {vertical, horizontal} = this.viewport;
         this.dataTableCache.resize(this.viewport.vertical.count, this.viewport.horizontal.count);
+        this.idTableCache.resize(this.viewport.vertical.count, 2);
         const render = (startRow: number, endRow: number) => {
             for (let rowNumber = startRow; rowNumber < endRow; rowNumber++) {
                 const tr = this.dataTableCache.getRow(rowNumber);

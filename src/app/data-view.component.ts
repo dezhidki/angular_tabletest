@@ -119,7 +119,9 @@ class TableCache {
     rows: RowStore[] = [];
     activeArea: Position = {horizontal: 0, vertical: 0};
 
-    constructor(private tbody: HTMLTableSectionElement, private cellElement: 'td' | 'th' = 'td') {
+    constructor(private tbody: HTMLTableSectionElement,
+                private cellElement: 'td' | 'th' = 'td',
+                private createCellContent?: (cell: HTMLTableCellElement, rowIndex: number, columnIndex: number) => void) {
     }
 
     getRow(rowIndex: number): HTMLTableRowElement {
@@ -156,6 +158,9 @@ class TableCache {
                 // Don't update col count to correct one yet, handle just rows first
                 for (let columnNumber = 0; columnNumber < columns; columnNumber++) {
                     const cell = row.cells[columnNumber] = el(this.cellElement);
+                    if (this.createCellContent) {
+                        this.createCellContent(cell, rowNumber, columnNumber);
+                    }
                     row.row.appendChild(cell);
                 }
                 this.tbody.appendChild(row.row);
@@ -171,12 +176,15 @@ class TableCache {
             // Columns need to be added => make use of colcache here
             for (let rowNumber = 0; rowNumber < rows; rowNumber++) {
                 const row = this.rows[rowNumber];
-                for (let columnIndex = 0; columnIndex < columns; columnIndex++) {
-                    let cell = row.cells[columnIndex];
+                for (let columnNumber = 0; columnNumber < columns; columnNumber++) {
+                    let cell = row.cells[columnNumber];
                     if (cell) {
                         cell.hidden = false;
                     } else {
-                        cell = row.cells[columnIndex] = el(this.cellElement);
+                        cell = row.cells[columnNumber] = el(this.cellElement);
+                        if (this.createCellContent) {
+                            this.createCellContent(cell, rowNumber, columnNumber);
+                        }
                         row.row.appendChild(cell);
                     }
                 }
@@ -277,9 +285,23 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     ngAfterViewInit(): void {
         this.dataTableCache = new TableCache(this.tbody);
-        this.idTableCache = new TableCache(this.idTableBody.nativeElement as HTMLTableSectionElement);
+        this.idTableCache = new TableCache(
+            this.idTableBody.nativeElement as HTMLTableSectionElement,
+            'td',
+            (cell, rowIndex, columnIndex) => {
+                if (columnIndex !== 1) { return; }
+                const input = cell.appendChild(el('input'));
+                input.type = 'checkbox';
+            }
+        );
         this.headerIdTableCache = new TableCache(this.headerIdTable.nativeElement as HTMLTableSectionElement, 'th');
-        this.filterTableCache = new TableCache(this.filterTable.nativeElement as HTMLTableSectionElement);
+        this.filterTableCache = new TableCache(
+            this.filterTable.nativeElement as HTMLTableSectionElement,
+            'td',
+            cell => {
+                const input = cell.appendChild(el('input'));
+                input.type = 'text';
+            });
         this.buildTable();
         if (this.virtualScrolling.enabled) {
             // Scrolling can cause change detection on some cases, which slows down the table
@@ -383,12 +405,17 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                     this.updateCell(td, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
                 }
 
+                const idRow = this.idTableCache.getRow(rowNumber);
+                idRow.style.height = `${this.modelProvider.getRowHeight(rowIndex)}px`;
                 const idCell = this.idTableCache.getCell(rowNumber, 0);
                 idCell.textContent = `${rowIndex}`;
 
                 for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
                     const headerIdCell = this.headerIdTableCache.getCell(0, columnNumber);
+                    const filterCell = this.filterTableCache.getCell(0, columnNumber);
                     const columnIndex = this.colAxis.visibleItems[horizontal.startIndex + columnNumber];
+                    const width = this.modelProvider.getColumnWidth(columnIndex);
+                    headerIdCell.style.width = filterCell.style.width = `${width}px`;
                     headerIdCell.textContent = `${columnIndex}`;
                 }
             }
@@ -491,10 +518,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             headerCell.style.width = `${this.modelProvider.getColumnWidth(columnIndex)}px`;
 
             const filterCell = this.filterTableCache.getCell(0, column);
-            const filterInput = el('input');
-            filterInput.type = 'text';
             filterCell.style.width = `${this.modelProvider.getColumnWidth(columnIndex)}px`;
-            filterCell.appendChild(filterInput);
         }
     }
 
@@ -513,11 +537,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             const idCell = this.idTableCache.getCell(row, 0);
             idCell.textContent = `${rowIndex}`;
             idCell.style.width = '2em';
-
-            const selectCell = this.idTableCache.getCell(row, 1);
-            const input = el('input');
-            input.type = 'checkbox';
-            selectCell.appendChild(input);
         }
     }
 

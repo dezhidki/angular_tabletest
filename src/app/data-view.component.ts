@@ -119,7 +119,7 @@ class TableCache {
     rows: RowStore[] = [];
     activeArea: Position = {horizontal: 0, vertical: 0};
 
-    constructor(private tbody: HTMLTableSectionElement) {
+    constructor(private tbody: HTMLTableSectionElement, private cellElement: 'td' | 'th' = 'td') {
     }
 
     getRow(rowIndex: number): HTMLTableRowElement {
@@ -155,7 +155,7 @@ class TableCache {
                 };
                 // Don't update col count to correct one yet, handle just rows first
                 for (let columnNumber = 0; columnNumber < columns; columnNumber++) {
-                    const cell = row.cells[columnNumber] = el('td');
+                    const cell = row.cells[columnNumber] = el(this.cellElement);
                     row.row.appendChild(cell);
                 }
                 this.tbody.appendChild(row.row);
@@ -176,7 +176,7 @@ class TableCache {
                     if (cell) {
                         cell.hidden = false;
                     } else {
-                        cell = row.cells[columnIndex] = el('td');
+                        cell = row.cells[columnIndex] = el(this.cellElement);
                         row.row.appendChild(cell);
                     }
                 }
@@ -207,8 +207,9 @@ class TableCache {
     selector: 'app-data-view',
     template: `
         <div class="header" #headerContainer>
-            <table>
-                <tbody #headerTable></tbody>
+            <table #headerTable>
+                <thead #headerIdTable></thead>
+                <tbody #filterTable></tbody>
             </table>
         </div>
         <div class="ids" #idsContainer>
@@ -231,6 +232,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @ViewChild('dataContainer') dataEl?: ElementRef;
     @ViewChild('idTableBody') idTableBody?: ElementRef;
     @ViewChild('idTable') idTable?: ElementRef;
+    @ViewChild('filterTable') filterTable?: ElementRef;
+    @ViewChild('headerIdTable') headerIdTable?: ElementRef;
     @ViewChild('headerTable') headerTable?: ElementRef;
     @ViewChild('idsContainer') idsContainer?: ElementRef;
     @Input() modelProvider!: TableModelProvider; // TODO: Make optional and error out if missing
@@ -243,7 +246,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     private cellValueCache: Record<number, string[]> = {};
     private dataTableCache: TableCache;
     private idTableCache: TableCache;
-    private headerTableCache: TableCache;
+    private headerIdTableCache: TableCache;
+    private filterTableCache: TableCache;
     private scheduledUpdate = false;
     private viewport: Viewport;
     private rowAxis: GridAxis;
@@ -276,7 +280,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     ngAfterViewInit(): void {
         this.dataTableCache = new TableCache(this.tbody);
         this.idTableCache = new TableCache(this.idTableBody.nativeElement as HTMLTableSectionElement);
-        this.headerTableCache = new TableCache(this.headerTable.nativeElement as HTMLTableSectionElement);
+        this.headerIdTableCache = new TableCache(this.headerIdTable.nativeElement as HTMLTableSectionElement, 'th');
+        this.filterTableCache = new TableCache(this.filterTable.nativeElement as HTMLTableSectionElement);
         this.buildTable();
         if (this.virtualScrolling.enabled) {
             // Scrolling can cause change detection on some cases, which slows down the table
@@ -365,6 +370,8 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         const {vertical, horizontal} = this.viewport;
         this.dataTableCache.resize(this.viewport.vertical.count, this.viewport.horizontal.count);
         this.idTableCache.resize(this.viewport.vertical.count, 2);
+        this.headerIdTableCache.resize(1, this.viewport.horizontal.count);
+        this.filterTableCache.resize(1, this.viewport.horizontal.count);
         const render = (startRow: number, endRow: number) => {
             for (let rowNumber = startRow; rowNumber < endRow; rowNumber++) {
                 const tr = this.dataTableCache.getRow(rowNumber);
@@ -380,6 +387,12 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
                 const idCell = this.idTableCache.getCell(rowNumber, 0);
                 idCell.textContent = `${rowIndex}`;
+
+                for (let columnNumber = 0; columnNumber < horizontal.count; columnNumber++) {
+                    const headerIdCell = this.headerIdTableCache.getCell(0, columnNumber);
+                    const columnIndex = this.colAxis.visibleItems[horizontal.startIndex + columnNumber];
+                    headerIdCell.textContent = `${columnIndex}`;
+                }
             }
         };
         // Render in three parts:
@@ -459,26 +472,27 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         }
         const table = this.tableContainerEl;
         const idTable = this.idTable.nativeElement as HTMLElement;
+        const headerTable = this.headerTable.nativeElement as HTMLElement;
         table.style.height = `${this.rowAxis.totalSize}px`;
         table.style.width = `${this.colAxis.totalSize}px`;
         table.style.borderSpacing = `${this.virtualScrolling.borderSpacing}px`;
         idTable.style.height = `${this.rowAxis.totalSize}px`;
         idTable.style.borderSpacing = `${this.virtualScrolling.borderSpacing}px`;
+        headerTable.style.width = `${this.colAxis.totalSize}px`;
+        headerTable.style.borderSpacing = `${this.virtualScrolling.borderSpacing}px`;
     }
 
     private buildHeaderTable(): void {
-        if (!this.headerTableCache) {
-            return;
-        }
-        this.headerTableCache.resize(2, this.viewport.horizontal.count);
+        this.headerIdTableCache.resize(1, this.viewport.horizontal.count);
+        this.filterTableCache.resize(1, this.viewport.horizontal.count);
         const {horizontal} = this.viewport;
         for (let column = 0; column < horizontal.count; column++) {
             const columnIndex = this.colAxis.visibleItems[column + horizontal.startIndex];
-            const headerCell = this.headerTableCache.getCell(0, column);
+            const headerCell = this.headerIdTableCache.getCell(0, column);
             headerCell.textContent = `${columnIndex}`;
             headerCell.style.width = `${this.modelProvider.getColumnWidth(columnIndex)}px`;
 
-            const filterCell = this.headerTableCache.getCell(1, column);
+            const filterCell = this.filterTableCache.getCell(0, column);
             const filterInput = el('input');
             filterInput.type = 'text';
             filterCell.style.width = `${this.modelProvider.getColumnWidth(columnIndex)}px`;
@@ -553,8 +567,11 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     private updateScroll(): void {
         const idTable = this.idTableBody.nativeElement as HTMLElement;
+        const headerIdTable = this.headerIdTable.nativeElement as HTMLElement;
+        const filterTable = this.filterTable.nativeElement as HTMLElement;
         this.tbody.style.transform = `translateX(${this.viewport.horizontal.startPosition}px) translateY(${this.viewport.vertical.startPosition}px)`;
         idTable.style.transform = `translateY(${this.viewport.vertical.startPosition}px)`;
+        headerIdTable.style.transform = filterTable.style.transform = `translateX(${this.viewport.horizontal.startPosition}px)`;
     }
 
     private startCellPurifying(): void {
@@ -574,8 +591,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 }
 
-type HTMLKeys<K extends keyof HTMLElementTagNameMap> = Partial<{ [k in keyof HTMLElementTagNameMap[K]]: unknown }>;
-
 function el<K extends keyof HTMLElementTagNameMap>(tag: K): HTMLElementTagNameMap[K] {
     return document.createElement(tag);
 }
@@ -592,12 +607,6 @@ function runMultiFrame(iter: Generator): void {
         }
     };
     requestAnimationFrame(cb);
-}
-
-function waitForFrame(): Promise<void> {
-    return new Promise<void>(r => requestAnimationFrame(() => {
-        r();
-    }));
 }
 
 interface PurifyData {

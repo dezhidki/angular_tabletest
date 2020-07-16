@@ -49,3 +49,9 @@ table.virtual {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+::ng-deep .header input {
+    width: 90%;
+    margin-right: 5%;
+    margin-left: 5%;
+}

@@ -554,7 +554,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     private updateScroll(): void {
         const idTable = this.idTableBody.nativeElement as HTMLElement;
         this.tbody.style.transform = `translateX(${this.viewport.horizontal.startPosition}px) translateY(${this.viewport.vertical.startPosition}px)`;
-        idTable.style.transform = `translateX(${this.viewport.horizontal.startPosition}px) translateY(${this.viewport.vertical.startPosition}px)`;
+        idTable.style.transform = `translateY(${this.viewport.vertical.startPosition}px)`;
     }
 
     private startCellPurifying(): void {

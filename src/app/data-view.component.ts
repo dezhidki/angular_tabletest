@@ -1,17 +1,5 @@
-import {
-    AfterViewInit,
-    Component,
-    ContentChildren,
-    ElementRef,
-    Input,
-    NgZone,
-    OnInit,
-    QueryList,
-    Renderer2,
-    ViewChild
-} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, Input, NgZone, OnInit, Renderer2, ViewChild} from '@angular/core';
 import * as DOMPurify from 'dompurify';
-import {FixedDataDirective} from './fixed-data.directive';
 
 export interface TableModelProvider {
     getDimension(): { rows: number, columns: number };
@@ -305,6 +293,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     handleWindowResize(): void {
+        this.updateHeaderIdsSizes();
         this.viewport = this.getViewport();
         runMultiFrame(this.updateViewport());
     }
@@ -351,6 +340,15 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         }
         this.buildIdTable();
         this.buildHeaderTable();
+        this.updateHeaderIdsSizes();
+    }
+
+    private updateHeaderIdsSizes(): void {
+        const data = this.dataEl.nativeElement as HTMLElement;
+        const header = this.headerEl.nativeElement as HTMLElement;
+        const ids = this.idsContainer.nativeElement as HTMLElement;
+        header.style.width = `${data.clientWidth}px`;
+        ids.style.height = `${data.clientHeight}px`;
     }
 
     private isOutsideSafeViewZone(): boolean {
@@ -378,6 +376,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                     const columnIndex = this.colAxis.visibleItems[horizontal.startIndex + columnNumber];
                     this.updateCell(td, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
                 }
+
+                const idCell = this.idTableCache.getCell(rowNumber, 0);
+                idCell.textContent = `${rowIndex}`;
             }
         };
         // Render in three parts:

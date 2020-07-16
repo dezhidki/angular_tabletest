@@ -237,8 +237,6 @@ class TableCache {
     styleUrls: ['./data-view.component.scss']
 })
 export class DataViewComponent implements AfterViewInit, OnInit {
-
-    @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
     @ViewChild('container') container!: ElementRef;
     @ViewChild('tableContainer') tableContainer!: ElementRef;
     @ViewChild('headerContainer') headerEl?: ElementRef;
@@ -347,13 +345,12 @@ export class DataViewComponent implements AfterViewInit, OnInit {
                 this.updateCell(cell, rowIndex, columnIndex, this.getCellValue(rowIndex, columnIndex));
             }
         }
-        // Optimization: sanitize whole tbody in place
+        // Optimization in normal mode: sanitize whole tbody in place
         if (!this.virtualScrolling.enabled) {
             DOMPurify.sanitize(tbody, {IN_PLACE: true});
         }
         this.buildIdTable();
         this.buildHeaderTable();
-        this.updateHeaderIdsSizes();
     }
 
     private isOutsideSafeViewZone(): boolean {
@@ -462,14 +459,6 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         table.style.height = `${this.rowAxis.totalSize}px`;
         table.style.width = `${this.colAxis.totalSize}px`;
         table.style.borderSpacing = `${this.virtualScrolling.borderSpacing}px`;
-    }
-
-    private updateHeaderIdsSizes(): void {
-        const data = this.dataEl.nativeElement as HTMLElement;
-        const header = this.headerEl.nativeElement as HTMLElement;
-        const ids = this.idsContainer.nativeElement as HTMLElement;
-        header.style.width = `${data.clientWidth}px`;
-        ids.style.height = `${data.clientHeight}px`;
     }
 
     private buildHeaderTable(): void {

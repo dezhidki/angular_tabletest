@@ -212,8 +212,8 @@ class TableCache {
             </table>
         </div>
         <div class="ids" #idsContainer>
-            <table>
-                <tbody #idTable></tbody>
+            <table #idTable>
+                <tbody #idTableBody></tbody>
             </table>
         </div>
         <div class="data" style="height: 50vh; overflow: scroll;" #dataContainer>
@@ -229,6 +229,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     @ViewChild('tableContainer') tableContainer!: ElementRef;
     @ViewChild('headerContainer') headerEl?: ElementRef;
     @ViewChild('dataContainer') dataEl?: ElementRef;
+    @ViewChild('idTableBody') idTableBody?: ElementRef;
     @ViewChild('idTable') idTable?: ElementRef;
     @ViewChild('headerTable') headerTable?: ElementRef;
     @ViewChild('idsContainer') idsContainer?: ElementRef;
@@ -274,7 +275,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
     ngAfterViewInit(): void {
         this.dataTableCache = new TableCache(this.tbody);
-        this.idTableCache = new TableCache(this.idTable.nativeElement as HTMLTableSectionElement);
+        this.idTableCache = new TableCache(this.idTableBody.nativeElement as HTMLTableSectionElement);
         this.headerTableCache = new TableCache(this.headerTable.nativeElement as HTMLTableSectionElement);
         this.buildTable();
         if (this.virtualScrolling.enabled) {
@@ -457,9 +458,12 @@ export class DataViewComponent implements AfterViewInit, OnInit {
             return;
         }
         const table = this.tableContainerEl;
+        const idTable = this.idTable.nativeElement as HTMLElement;
         table.style.height = `${this.rowAxis.totalSize}px`;
         table.style.width = `${this.colAxis.totalSize}px`;
         table.style.borderSpacing = `${this.virtualScrolling.borderSpacing}px`;
+        idTable.style.height = `${this.rowAxis.totalSize}px`;
+        idTable.style.borderSpacing = `${this.virtualScrolling.borderSpacing}px`;
     }
 
     private buildHeaderTable(): void {
@@ -496,6 +500,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
 
             const idCell = this.idTableCache.getCell(row, 0);
             idCell.textContent = `${rowIndex}`;
+            idCell.style.width = '2em';
 
             const selectCell = this.idTableCache.getCell(row, 1);
             const input = el('input');
@@ -547,7 +552,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     private updateScroll(): void {
+        const idTable = this.idTableBody.nativeElement as HTMLElement;
         this.tbody.style.transform = `translateX(${this.viewport.horizontal.startPosition}px) translateY(${this.viewport.vertical.startPosition}px)`;
+        idTable.style.transform = `translateX(${this.viewport.horizontal.startPosition}px) translateY(${this.viewport.vertical.startPosition}px)`;
     }
 
     private startCellPurifying(): void {

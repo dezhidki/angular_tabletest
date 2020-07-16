@@ -314,7 +314,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
     }
 
     handleWindowResize(): void {
-        this.updateHeaderIdsSizes();
+        this.viewport = this.getViewport();
         runMultiFrame(this.updateViewport());
     }
 

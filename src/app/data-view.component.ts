@@ -198,8 +198,6 @@ class TableCache {
     }
 }
 
-// TODO: Make all headers virtual and part of the datagrid
-// TODO: Add ID + checkbox cols
 // TODO: Support for hiding rows
 // TODO: Support for row/column span
 

@@ -3,7 +3,6 @@ import {
     Component,
     ContentChildren,
     ElementRef,
-    HostBinding,
     Input,
     NgZone,
     OnInit,
@@ -245,6 +244,7 @@ class TableCache {
     styleUrls: ['./data-view.component.scss']
 })
 export class DataViewComponent implements AfterViewInit, OnInit {
+
     @ContentChildren(FixedDataDirective) fixedElements!: QueryList<FixedDataDirective>;
     @ViewChild('container') container!: ElementRef;
     @ViewChild('tableContainer') tableContainer!: ElementRef;
@@ -259,6 +259,7 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         viewOverflow: {horizontal: 1, vertical: 1},
         borderSpacing: 2
     };
+    viewPortdY = 0;
     private cellValueCache: Record<number, string[]> = {};
     private dataTableCache: TableCache;
     private idTableCache: TableCache;
@@ -327,7 +328,9 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         }
         this.scheduledUpdate = true;
         // Set viewport already here to account for subsequent handlers
-        this.viewport = this.getViewport();
+        const newViewport = this.getViewport();
+        this.viewPortdY = newViewport.vertical.startIndex - this.viewport.vertical.startIndex;
+        this.viewport = newViewport;
         this.updateScroll();
         runMultiFrame(this.updateViewport());
     }
@@ -390,8 +393,19 @@ export class DataViewComponent implements AfterViewInit, OnInit {
         // * The main visible area
         // * The top part
         // * The bottom part
-        render(0, vertical.count);
+        let renderOrder = [
+            () => render(0, vertical.viewStartIndex),
+            () => render(vertical.viewStartIndex + vertical.viewCount, vertical.count)
+        ];
+        if (this.viewPortdY > 0) {
+            renderOrder = renderOrder.reverse();
+        }
+        render(vertical.viewStartIndex, vertical.viewStartIndex + vertical.viewCount);
         yield;
+        for (const r of renderOrder) {
+            r();
+            yield;
+        }
         // render(0, vertical.viewStartIndex);
         // yield;
         // render(vertical.viewStartIndex + vertical.viewCount, vertical.count);
